@@ -11,7 +11,7 @@ class RobotController:
     Encapsulates all robot control logic including IK, motion planning, and gripper control.
     """
 
-    def __init__(self, armId, endEffectorIndex, simulation_state, object_manager):
+    def __init__(self, armId, endEffectorIndex, simulation_state, object_manager, camera_manager=None):
         """
         Initialize robot controller.
 
@@ -20,11 +20,13 @@ class RobotController:
             endEffectorIndex: Index of the end effector link
             simulation_state: SimulationState instance for state tracking
             object_manager: ObjectManager instance for object queries
+            camera_manager: CameraManager instance for panorama capture (optional)
         """
         self.armId = armId
         self.endEffectorIndex = endEffectorIndex
         self.simulation_state = simulation_state
         self.object_manager = object_manager
+        self.camera_manager = camera_manager
 
         # Joint configuration
         self.ll = LOWER_LIMITS
@@ -294,6 +296,11 @@ class RobotController:
 
         print("=== PICK UP END ===")
         print(f"t={self.simulation_state.t}")
+
+        # Capture panorama after pick up operation
+        if self.camera_manager is not None:
+            self.camera_manager.capture_and_save_panorama(f"pickup_{target_object}")
+
         return gripper_pos
 
     def place(self, place_position):
@@ -327,5 +334,11 @@ class RobotController:
 
         print("=== PLACE END ===")
         print(f"t={self.simulation_state.t}")
+
+        # Capture panorama after place operation
+        if self.camera_manager is not None:
+            place_str = f"place_{place_position[0]:.2f}_{place_position[1]:.2f}_{place_position[2]:.2f}"
+            self.camera_manager.capture_and_save_panorama(place_str)
+
         gripper_pos = [0, 0, 0]
         return gripper_pos

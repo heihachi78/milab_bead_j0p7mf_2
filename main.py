@@ -4,6 +4,7 @@ from config import *
 from simulation_state import SimulationState
 from object_manager import ObjectManager
 from robot_controller import RobotController
+from camera_manager import CameraManager
 
 # Connect to PyBullet
 clid = p.connect(p.SHARED_MEMORY)
@@ -26,7 +27,8 @@ p.setGravity(0, 0, GRAVITY)
 # Initialize simulation components
 simulation_state = SimulationState()
 object_manager = ObjectManager()
-robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager)
+camera_manager = CameraManager()
+robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager)
 
 # Stabilize robot
 robot_controller.stabilize()
@@ -42,6 +44,9 @@ object_manager.load_cube('green_cube', GREEN_CUBE_POS, GREEN_COLOR)
 # Stabilization loop
 for i in range(STABILIZATION_LOOP_STEPS):
     p.stepSimulation()
+
+# Capture initial panorama after stabilization
+camera_manager.capture_and_save_panorama("initial_stabilized")
 
 # Main pick and place operations
 print(f"==========================================")

@@ -93,3 +93,19 @@ GRIPPER_LINK_INDEX = -1
 DEBUG_LINE_COLOR_1 = [0, 0, 0.3]
 DEBUG_LINE_COLOR_2 = [1, 0, 0]
 DEBUG_LINE_WIDTH = 1
+
+# Camera configuration
+CAMERA_TARGET_POSITION = [0, 0, 0.5]  # Center of workspace
+CAMERA_DISTANCE = 1.5  # Distance from target
+CAMERA_IMAGE_WIDTH = 640
+CAMERA_IMAGE_HEIGHT = 480
+CAMERA_FOV = 60  # Field of view in degrees
+CAMERA_NEAR_PLANE = 0.01
+CAMERA_FAR_PLANE = 5.0
+
+# Camera positions (5 directions: front, right, back, left, top)
+CAMERA_YAW_ANGLES = [0, 90, 180, 270, 0]  # Azimuth angles
+CAMERA_PITCH_ANGLES = [0, 0, 0, 0, -89]  # Elevation angles (-89 for near-top view)
+
+# Panorama settings
+IMAGES_FOLDER = 'images'
