@@ -218,23 +218,30 @@ class RobotController:
 
         return ls[0]
 
-    def move_to_target_linear(self, pos, threshold, num_waypoints=DEFAULT_NUM_WAYPOINTS):
+    def move_to_target_linear(self, pos, threshold):
         """
         Moves to target position using linear interpolation through intermediate waypoints.
         This results in a straighter trajectory than direct move_to_target.
+        Waypoints are automatically calculated to have one waypoint per centimeter of distance.
 
         Args:
             pos: Target position [x, y, z]
             threshold: Distance threshold for considering target reached
-            num_waypoints: Number of intermediate points on the trajectory
 
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== MOVE TO TARGET LINEAR START === Target: {pos}, Waypoints: {num_waypoints}")
-
         ls = p.getLinkState(self.armId, self.endEffectorIndex)
         current_pos = ls[0]
+
+        # Calculate distance in meters
+        distance = np.linalg.norm(np.array(pos) - np.array(current_pos))
+
+        # Convert to centimeters and round up to get number of waypoints
+        distance_cm = distance * 100
+        num_waypoints = max(1, int(np.ceil(distance_cm)))
+
+        print(f"=== MOVE TO TARGET LINEAR START === Target: {pos}, Distance: {distance:.4f}m ({distance_cm:.2f}cm), Waypoints: {num_waypoints}")
         print(f"Current end effector position: {current_pos}, t={self.simulation_state.t}")
 
         for i in range(1, num_waypoints + 1):

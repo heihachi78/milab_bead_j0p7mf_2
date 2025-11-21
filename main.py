@@ -44,18 +44,17 @@ for i in range(STABILIZATION_LOOP_STEPS):
     p.stepSimulation()
 
 # Main pick and place operations
-for i in range(PICK_PLACE_ITERATIONS):
-    print(f"==========================================")
-    print(f"simulation started t={simulation_state.t}")
-    print(f"==========================================")
+print(f"==========================================")
+print(f"simulation started t={simulation_state.t}")
+print(f"==========================================")
 
-    robot_controller.pick_up('blue_cube')
-    robot_controller.place(object_manager.get_object_center_position('red_cube'))
-    robot_controller.pick_up('green_cube')
-    robot_controller.place(object_manager.get_object_center_position('blue_cube'))
+robot_controller.pick_up('blue_cube')
+robot_controller.place(object_manager.get_object_center_position('red_cube'))
+robot_controller.pick_up('green_cube')
+robot_controller.place(object_manager.get_object_center_position('blue_cube'))
 
-    print(f"==========================================")
-    print(f"simulation ended t={simulation_state.t}")
-    print(f"==========================================")
+print(f"==========================================")
+print(f"simulation ended t={simulation_state.t}")
+print(f"==========================================")
 
 p.disconnect()

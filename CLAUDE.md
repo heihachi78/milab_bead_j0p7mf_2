@@ -85,7 +85,7 @@ Modify the main loop (lines 433-446) which currently:
 
 ### Adjusting Movement Quality
 
-- Increase `DEFAULT_NUM_WAYPOINTS` for smoother linear trajectories
+- Waypoints in `move_to_target_linear()` are automatically calculated (1 waypoint per centimeter of distance)
 - Decrease `DISTANCE_CHANGE_THRESHOLD` for more precise positioning
 - Adjust threshold parameters for different accuracy requirements per operation phase
 
