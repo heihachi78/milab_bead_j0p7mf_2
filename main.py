@@ -1,5 +1,10 @@
+#https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics.py
+#https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics_husky_kuka.py
+
 import pybullet as p
 import pybullet_data
+import os
+import glob
 from config import *
 from simulation_state import SimulationState
 from object_manager import ObjectManager
@@ -34,6 +39,13 @@ robot_controller = RobotController(armId, endEffectorIndex, simulation_state, ob
 # Stabilize robot
 robot_controller.stabilize()
 
+# Clear images folder from previous runs
+images_folder = IMAGES_FOLDER
+if os.path.exists(images_folder):
+    for file in glob.glob(os.path.join(images_folder, '*')):
+        os.remove(file)
+    print(f"Cleared {images_folder} folder")
+
 # Set simulation parameters
 p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
 
@@ -60,18 +72,18 @@ print(f"simulation started t={simulation_state.t}")
 print(f"==========================================")
 
 # Generate plan using LLM
-plan = llm_controller.generate_plan()
+#plan = llm_controller.generate_plan()
 
 # Execute the plan
-llm_controller.execute_plan(plan)
-'''
+#llm_controller.execute_plan(plan)
+
+
 robot_controller.pick_up('blue_cube')
 robot_controller.place([-0.45, 0.45, 0])
 robot_controller.pick_up('red_cube')
 robot_controller.place_on('blue_cube')
 robot_controller.pick_up('green_cube')
 robot_controller.place_on('red_cube')
-'''
 
 print(f"==========================================")
 print(f"simulation ended t={simulation_state.t}")

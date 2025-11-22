@@ -2,7 +2,6 @@ import pybullet as p
 import numpy as np
 from PIL import Image
 import os
-from datetime import datetime
 from config import *
 
 
@@ -144,8 +143,7 @@ class CameraManager:
         Returns:
             str: Path to saved image
         """
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"panorama_{self.panorama_counter:03d}_{operation_name}_{timestamp}.png"
+        filename = f"panorama_{self.panorama_counter:03d}_{operation_name}.png"
         filepath = os.path.join(self.images_folder, filename)
 
         panorama.save(filepath)

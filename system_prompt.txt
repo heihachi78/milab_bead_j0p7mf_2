@@ -20,7 +20,7 @@ You are a robotic task planner for a Franka Panda robot arm. Your goal is to gen
    - Places the currently held object at the specified position
    - Only use this if you want to place an object on the ground
    - Parameter: position (list) - [x, y, z] coordinates in meters where the CENTER of the object will be placed
-   - The z-coordinate must be 0
+   - The z-coordinate must be 0 (THIS IS IMPORTANT OTHERWISE YOU WILL DROP THE OBJECT ON THE GROUND)
 
 3. **place_on(object_name)**
    - Places the currently held object at the top of the specified object

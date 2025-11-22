@@ -229,7 +229,9 @@ class RobotController:
 
     def move_to_target_smooth(self, pos, threshold):
         """
-        Moves to target position until convergence threshold is met.
+        Moves to target position using linear interpolation in each iteration.
+        In every step, the arm moves to the next point along a straight line from start to target.
+        Uses time-based interpolation for consistent movement speed.
 
         Args:
             pos: Target position [x, y, z]
@@ -238,12 +240,28 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== MOVE TO TARGET START === Target: {pos}, Threshold: {threshold}")
+        print(f"=== MOVE TO TARGET SMOOTH START === Target: {pos}, Threshold: {threshold}")
         print(f"t={self.simulation_state.t}")
+
+        # Get initial position at the start
+        ls = p.getLinkState(self.armId, self.endEffectorIndex)
+        start_pos = np.array(ls[0])
+        target_pos = np.array(pos)
+
+        # Calculate total distance for speed adjustment
+        total_distance = np.linalg.norm(target_pos - start_pos)
+
+        # Scale movement speed based on distance to maintain straightness
+        # Longer distances need more time for the arm to follow the path accurately
+        # This prevents the arm from lagging too far behind the moving target
+        movement_duration = total_distance * SMOOTH_MOVEMENT_SPEED_MULTIPLIER
 
         prev_distance = 9999.9999
         s = 0
         max_iterations = MAX_ITERATIONS
+
+        # Time parameter for smooth interpolation
+        movement_time = 0.0
 
         while s < max_iterations:
             s += 1
@@ -254,18 +272,29 @@ class RobotController:
             else:
                 self.simulation_state.step_time()
 
+            # Increment time by fixed step (like PyBullet example)
+            movement_time = movement_time + TIME_STEP
+
+            # Calculate linear interpolation factor (0 to 1), scaled by distance
+            # Slower progression for longer distances to keep the arm closer to the target
+            alpha = min(1.0, movement_time / movement_duration)
+
+            # Calculate intermediate target position using linear interpolation
+            intermediate_pos = start_pos + alpha * (target_pos - start_pos)
+            intermediate_pos_list = intermediate_pos.tolist()
+
             if self.useSimulation and self.useRealTimeSimulation == 0:
                 p.stepSimulation()
                 orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
 
                 if self.useNullSpace == 1:
                     if self.useOrientation == 1:
-                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, pos, orn, self.ll, self.ul,
+                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, intermediate_pos_list, orn, self.ll, self.ul,
                                                                   self.jr, self.rp)
                     else:
                         jointPoses = p.calculateInverseKinematics(self.armId,
                                                                   self.endEffectorIndex,
-                                                                  pos,
+                                                                  intermediate_pos_list,
                                                                   lowerLimits=self.ll,
                                                                   upperLimits=self.ul,
                                                                   jointRanges=self.jr,
@@ -274,7 +303,7 @@ class RobotController:
                     if self.useOrientation == 1:
                         jointPoses = p.calculateInverseKinematics(self.armId,
                                                                   self.endEffectorIndex,
-                                                                  pos,
+                                                                  intermediate_pos_list,
                                                                   orn,
                                                                   jointDamping=self.jd,
                                                                   solver=self.ikSolver,
@@ -283,7 +312,7 @@ class RobotController:
                     else:
                         jointPoses = p.calculateInverseKinematics(self.armId,
                                                                   self.endEffectorIndex,
-                                                                  pos,
+                                                                  intermediate_pos_list,
                                                                   solver=self.ikSolver)
 
                 if self.useSimulation:
@@ -302,22 +331,22 @@ class RobotController:
 
             ls = p.getLinkState(self.armId, self.endEffectorIndex)
             if self.simulation_state.hasPrevPose:
-                p.addUserDebugLine(self.simulation_state.prevPose, pos, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose, intermediate_pos_list, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
                 p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
-            self.simulation_state.prevPose = pos
+            self.simulation_state.prevPose = intermediate_pos_list
             self.simulation_state.prevPose1 = ls[4]
             self.simulation_state.hasPrevPose = 1
-            distance = np.linalg.norm(np.array(pos) - np.array(ls[0]))
+            distance = np.linalg.norm(target_pos - np.array(ls[0]))
             distance_change = prev_distance - distance
 
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
-                print(f"=== MOVE TO TARGET END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
+                print(f"=== MOVE TO TARGET SMOOTH END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
                 print(f"t={self.simulation_state.t}")
                 return ls[0]
 
             prev_distance = distance
 
-        print(f"=== MOVE TO TARGET END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
+        print(f"=== MOVE TO TARGET SMOOTH END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
         print(f"t={self.simulation_state.t}")
         return ls[0]
 
@@ -391,9 +420,9 @@ class RobotController:
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.open_gripper()
-        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
+        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.close_gripper()
-        self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
 
         print("=== PICK UP END ===")
         print(f"t={self.simulation_state.t}")
@@ -428,9 +457,9 @@ class RobotController:
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
-        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
+        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
-        self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.close_gripper()
 
@@ -467,9 +496,9 @@ class RobotController:
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
-        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
+        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
-        self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.close_gripper()
 

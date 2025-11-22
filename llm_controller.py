@@ -75,7 +75,7 @@ class LLMController:
 
         return system_prompt
 
-    def _find_latest_panorama(self, pattern: str = "panorama_*_initial_stabilized_*.png") -> str:
+    def _find_latest_panorama(self, pattern: str = "panorama_*_initial_stabilized.png") -> str:
         """Find the most recent panorama image matching the pattern."""
         images_dir = Path(__file__).parent / "images"
         if not images_dir.exists():
