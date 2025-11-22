@@ -71,9 +71,21 @@ while 1:
   for i in range(1):
     #pos = [-0.4, 0.2 * math.cos(t), 0. + 0.2 * math.sin(t)]
     if x < 100:
-      pos = [0.4, 0.4, 0]
-    else:
-      pos = [0.4, 0.4, t/10]
+      pos = [0.4, 0.4, 0.4]
+
+    if x > 400:
+      pos[2] += 0.005
+    elif x > 300 :
+      pos[1] += 0.005
+    elif x > 200 :
+      pos[2] -= 0.005
+    elif x > 100 :
+      pos[1] -= 0.005
+
+    if x > 500:
+      x -= 400
+
+    print(x, pos)
     #end effector points down, not up (in case useOrientation==1)
     orn = p.getQuaternionFromEuler([0, -math.pi, 0])
 
