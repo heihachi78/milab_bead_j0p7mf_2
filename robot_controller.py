@@ -42,6 +42,9 @@ class RobotController:
         self.useRealTimeSimulation = USE_REAL_TIME_SIMULATION
         self.ikSolver = IK_SOLVER
 
+        # Gripper state tracking
+        self.current_gripper_pos = GRIPPER_CLOSED_POSITION
+
     def stabilize(self):
         """Reset robot to rest pose and stabilize with motors."""
         for i in range(NUM_ARM_JOINTS):
@@ -54,6 +57,18 @@ class RobotController:
                                     targetPosition=self.rp[i],
                                     force=ARM_MOTOR_FORCE)
 
+        # Initialize gripper with motor control in closed position
+        p.setJointMotorControl2(bodyIndex=self.armId,
+                                jointIndex=FINGER_JOINT1_INDEX,
+                                controlMode=p.POSITION_CONTROL,
+                                targetPosition=GRIPPER_CLOSED_POSITION,
+                                force=GRIPPER_MOTOR_FORCE)
+        p.setJointMotorControl2(bodyIndex=self.armId,
+                                jointIndex=FINGER_JOINT2_INDEX,
+                                controlMode=p.POSITION_CONTROL,
+                                targetPosition=GRIPPER_CLOSED_POSITION,
+                                force=GRIPPER_MOTOR_FORCE)
+
         for _ in range(STABILIZATION_STEPS):
             p.stepSimulation()
 
@@ -62,24 +77,24 @@ class RobotController:
         print("=== OPEN GRIPPER START ===")
         print(f"t={self.simulation_state.t}")
 
-        arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
+        #arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
 
+        # Update gripper state tracking
+        self.current_gripper_pos = GRIPPER_OPEN_POSITION
+
+        # Allow normal speed for gripper opening (no maxVelocity constraint)
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
                                 jointIndex=FINGER_JOINT1_INDEX,
                                 targetPosition=GRIPPER_OPEN_POSITION,
-                                force=force)
+                                force=force,
+                                maxVelocity=0.2)  # Use URDF velocity limit
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
                                 jointIndex=FINGER_JOINT2_INDEX,
                                 targetPosition=GRIPPER_OPEN_POSITION,
-                                force=force)
+                                force=force,
+                                maxVelocity=0.2)
 
         for _ in range(GRIPPER_MOVEMENT_STEPS):
-            for i in range(NUM_ARM_JOINTS):
-                p.setJointMotorControl2(bodyIndex=self.armId,
-                                        jointIndex=i,
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=arm_positions[i],
-                                        force=ARM_MOTOR_FORCE)
             p.stepSimulation()
             self.simulation_state.step_time()
 
@@ -87,9 +102,9 @@ class RobotController:
             pos = ls[0]
             if self.simulation_state.hasPrevPose:
                 p.addUserDebugLine(self.simulation_state.prevPose, pos, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
-                p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose1, ls[0], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
             self.simulation_state.prevPose = pos
-            self.simulation_state.prevPose1 = ls[4]
+            self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
 
         print("=== OPEN GRIPPER END ===")
@@ -100,24 +115,24 @@ class RobotController:
         print("=== CLOSE GRIPPER START ===")
         print(f"t={self.simulation_state.t}")
 
-        arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
+        #arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
 
+        # Update gripper state tracking
+        self.current_gripper_pos = GRIPPER_CLOSED_POSITION
+
+        # Allow normal speed for gripper closing (no maxVelocity constraint)
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
                                 jointIndex=FINGER_JOINT1_INDEX,
                                 targetPosition=GRIPPER_CLOSED_POSITION,
-                                force=force)
+                                force=force,
+                                maxVelocity=0.2)  # Use URDF velocity limit
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
                                 jointIndex=FINGER_JOINT2_INDEX,
                                 targetPosition=GRIPPER_CLOSED_POSITION,
-                                force=force)
+                                force=force,
+                                maxVelocity=0.2)
 
         for _ in range(GRIPPER_MOVEMENT_STEPS):
-            for i in range(NUM_ARM_JOINTS):
-                p.setJointMotorControl2(bodyIndex=self.armId,
-                                        jointIndex=i,
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=arm_positions[i],
-                                        force=ARM_MOTOR_FORCE)
             p.stepSimulation()
             self.simulation_state.step_time()
 
@@ -125,9 +140,9 @@ class RobotController:
             pos = ls[0]
             if self.simulation_state.hasPrevPose:
                 p.addUserDebugLine(self.simulation_state.prevPose, pos, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
-                p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose1, ls[0], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
             self.simulation_state.prevPose = pos
-            self.simulation_state.prevPose1 = ls[4]
+            self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
 
         print("=== CLOSE GRIPPER END ===")
@@ -202,6 +217,26 @@ class RobotController:
                                                 force=ARM_MOTOR_FORCE,
                                                 positionGain=POSITION_GAIN,
                                                 velocityGain=VELOCITY_GAIN)
+
+                    # Maintain gripper position during arm movement with stronger control
+                    p.setJointMotorControl2(bodyIndex=self.armId,
+                                            jointIndex=FINGER_JOINT1_INDEX,
+                                            controlMode=p.POSITION_CONTROL,
+                                            targetPosition=self.current_gripper_pos,
+                                            targetVelocity=0,
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=0.3,
+                                            velocityGain=1.0,
+                                            maxVelocity=0.01)
+                    p.setJointMotorControl2(bodyIndex=self.armId,
+                                            jointIndex=FINGER_JOINT2_INDEX,
+                                            controlMode=p.POSITION_CONTROL,
+                                            targetPosition=self.current_gripper_pos,
+                                            targetVelocity=0,
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=0.3,
+                                            velocityGain=1.0,
+                                            maxVelocity=0.01)
                 else:
                     for i in range(NUM_ARM_JOINTS):
                         p.resetJointState(self.armId, i, jointPoses[i])
@@ -209,9 +244,9 @@ class RobotController:
             ls = p.getLinkState(self.armId, self.endEffectorIndex)
             if self.simulation_state.hasPrevPose:
                 p.addUserDebugLine(self.simulation_state.prevPose, pos, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
-                p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose1, ls[0], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
             self.simulation_state.prevPose = pos
-            self.simulation_state.prevPose1 = ls[4]
+            self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
             distance = np.linalg.norm(np.array(pos) - np.array(ls[0]))
             distance_change = prev_distance - distance
@@ -325,6 +360,26 @@ class RobotController:
                                                 force=ARM_MOTOR_FORCE,
                                                 positionGain=POSITION_GAIN,
                                                 velocityGain=VELOCITY_GAIN)
+
+                    # Maintain gripper position during arm movement with stronger control
+                    p.setJointMotorControl2(bodyIndex=self.armId,
+                                            jointIndex=FINGER_JOINT1_INDEX,
+                                            controlMode=p.POSITION_CONTROL,
+                                            targetPosition=self.current_gripper_pos,
+                                            targetVelocity=0,
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=0.3,
+                                            velocityGain=1.0,
+                                            maxVelocity=0.01)
+                    p.setJointMotorControl2(bodyIndex=self.armId,
+                                            jointIndex=FINGER_JOINT2_INDEX,
+                                            controlMode=p.POSITION_CONTROL,
+                                            targetPosition=self.current_gripper_pos,
+                                            targetVelocity=0,
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=0.3,
+                                            velocityGain=1.0,
+                                            maxVelocity=0.01)
                 else:
                     for i in range(NUM_ARM_JOINTS):
                         p.resetJointState(self.armId, i, jointPoses[i])
@@ -332,7 +387,7 @@ class RobotController:
             ls = p.getLinkState(self.armId, self.endEffectorIndex)
             if self.simulation_state.hasPrevPose:
                 p.addUserDebugLine(self.simulation_state.prevPose, intermediate_pos_list, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
-                p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose1, ls[0], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
             self.simulation_state.prevPose = intermediate_pos_list
             self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
@@ -415,10 +470,10 @@ class RobotController:
         close_target_pos[2] += PICK_CLOSE_OFFSET
         target_pos = self.object_manager.get_object_center_position(target_object)
         target_pos[2] += PICK_TARGET_OFFSET
-        
+
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.open_gripper()
         self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.close_gripper()
@@ -456,10 +511,10 @@ class RobotController:
         target_pos[2] += PLACE_TARGET_OFFSET
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
-        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.close_gripper()
 
@@ -495,7 +550,7 @@ class RobotController:
         target_pos[2] += PLACE_ON_TARGET_OFFSET
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
         self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
