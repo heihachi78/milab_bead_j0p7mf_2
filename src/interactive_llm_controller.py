@@ -469,6 +469,17 @@ Available objects in the scene can be queried using get_all_objects tool."""
         if tools_with_cache:
             tools_with_cache[-1]["cache_control"] = {"type": "ephemeral"}
 
+        # Log API request (before making the call)
+        if self.logger:
+            self.logger.log_api_request(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                system=system_with_cache,
+                tools=tools_with_cache,
+                messages=conversation_history,
+                call_type="initial"
+            )
+
         # Call Claude API with cached system + tools
         response = self.client.messages.create(
             model=self.model,
@@ -477,6 +488,10 @@ Available objects in the scene can be queried using get_all_objects tool."""
             tools=tools_with_cache,  # type: ignore
             messages=conversation_history
         )
+
+        # Log API response (after receiving the response)
+        if self.logger:
+            self.logger.log_api_response(response, call_type="initial")
 
         # Process response in a loop to handle multi-turn tool calling
         all_tool_results = []
@@ -559,6 +574,17 @@ Available objects in the scene can be queried using get_all_objects tool."""
                 "content": tool_result_content
             })
 
+            # Log API request (before making the follow-up call)
+            if self.logger:
+                self.logger.log_api_request(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=system_with_cache,
+                    tools=tools_with_cache,
+                    messages=conversation_history,
+                    call_type="follow-up"
+                )
+
             # Get follow-up response from Claude (with caching)
             response = self.client.messages.create(
                 model=self.model,
@@ -567,6 +593,10 @@ Available objects in the scene can be queried using get_all_objects tool."""
                 tools=tools_with_cache,  # type: ignore
                 messages=conversation_history
             )
+
+            # Log API response (after receiving the follow-up response)
+            if self.logger:
+                self.logger.log_api_response(response, call_type="follow-up")
 
         assistant_response = "\n".join(assistant_text_parts)
 

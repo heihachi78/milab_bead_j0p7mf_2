@@ -138,6 +138,10 @@ VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
 LOGS_FOLDER = 'logs'
 LOG_SESSION_NAME = None  # None = auto-generate timestamp-based name
 
+# API call logging settings (for interactive mode)
+LOG_API_CALLS = True  # Enable/disable detailed API call logging
+API_CALLS_LOG_FILE = 'api_calls'  # Filename prefix for API call logs (will be: api_calls_{session_name}.log)
+
 # Interactive mode settings
 INTERACTIVE_MAX_TOKENS = 4096  # Max tokens for interactive LLM responses
 INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System prompt file for interactive mode

@@ -1,7 +1,8 @@
 import logging
 import os
+import json
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 
 class SimulationLogger:
@@ -59,6 +60,19 @@ class SimulationLogger:
             f"{log_dir}/interactive_{session_name}.log",
             logging.DEBUG
         )
+
+        # API call logger for detailed request/response logging (interactive mode only)
+        # Check if API call logging is enabled in config
+        from src import config
+        if hasattr(config, 'LOG_API_CALLS') and config.LOG_API_CALLS:
+            log_filename = getattr(config, 'API_CALLS_LOG_FILE', 'api_calls')
+            self.api_call_logger = self._create_logger(
+                "api_calls",
+                f"{log_dir}/{log_filename}_{session_name}.log",
+                logging.DEBUG
+            )
+        else:
+            self.api_call_logger = None
 
         # Console logger for important messages only
         self.console_logger = self._create_console_logger()
@@ -355,6 +369,166 @@ class SimulationLogger:
         self.interactive_logger.info("-" * 60)
         self.interactive_logger.info("")  # Empty line for readability
 
+    # ============== API Call Logging Methods (Interactive Mode) ==============
+
+    def log_api_request(self, model: str, max_tokens: int, system: List[Dict[str, Any]],
+                       tools: List[Dict[str, Any]], messages: List[Dict[str, Any]],
+                       call_type: str = "initial"):
+        """
+        Log complete API request details for debugging and analysis.
+
+        Args:
+            model: Model name being called
+            max_tokens: Max tokens parameter
+            system: System prompt with cache control
+            tools: Tool definitions with cache control
+            messages: Conversation history
+            call_type: "initial" or "follow-up" to distinguish call types
+        """
+        if not self.api_call_logger:
+            return
+
+        self.api_call_logger.info("=" * 80)
+        self.api_call_logger.info(f"API REQUEST | Type: {call_type} | Model: {model}")
+        self.api_call_logger.info("-" * 80)
+        self.api_call_logger.info("REQUEST PARAMETERS:")
+
+        # Convert messages to serializable format
+        serializable_messages = []
+        for msg in messages:
+            serializable_msg = {"role": msg["role"]}
+
+            # Handle content field which may contain objects
+            if "content" in msg:
+                content = msg["content"]
+                if isinstance(content, str):
+                    # Simple string content
+                    serializable_msg["content"] = content
+                elif isinstance(content, list):
+                    # List of content blocks (may be dicts or objects)
+                    serializable_content = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            serializable_content.append(item)
+                        else:
+                            # It's an object (like TextBlock or ToolUseBlock)
+                            try:
+                                if hasattr(item, 'model_dump'):
+                                    serializable_content.append(item.model_dump())
+                                elif hasattr(item, 'dict'):
+                                    serializable_content.append(item.dict())
+                                else:
+                                    # Manual conversion
+                                    item_dict = {"type": getattr(item, 'type', 'unknown')}
+                                    if hasattr(item, 'text'):
+                                        item_dict["text"] = item.text
+                                    if hasattr(item, 'id'):
+                                        item_dict["id"] = item.id
+                                    if hasattr(item, 'name'):
+                                        item_dict["name"] = item.name
+                                    if hasattr(item, 'input'):
+                                        item_dict["input"] = item.input
+                                    serializable_content.append(item_dict)
+                            except Exception as e:
+                                serializable_content.append({
+                                    "type": "error_serializing",
+                                    "error": str(e),
+                                    "object_type": type(item).__name__
+                                })
+                    serializable_msg["content"] = serializable_content
+                else:
+                    serializable_msg["content"] = str(content)
+
+            serializable_messages.append(serializable_msg)
+
+        # Build request data structure
+        request_data = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "tools": tools,
+            "messages": serializable_messages
+        }
+
+        # Pretty-print JSON with 2-space indentation
+        formatted_request = json.dumps(request_data, indent=2, ensure_ascii=False)
+        self.api_call_logger.info(formatted_request)
+        self.api_call_logger.info("=" * 80)
+        self.api_call_logger.info("")  # Empty line for readability
+
+    def log_api_response(self, response: Any, call_type: str = "initial"):
+        """
+        Log complete API response details for debugging and analysis.
+
+        Args:
+            response: Full response object from Anthropic API
+            call_type: "initial" or "follow-up" to distinguish call types
+        """
+        if not self.api_call_logger:
+            return
+
+        self.api_call_logger.info("=" * 80)
+        self.api_call_logger.info(f"API RESPONSE | Type: {call_type}")
+        self.api_call_logger.info("-" * 80)
+        self.api_call_logger.info("RESPONSE CONTENT:")
+
+        # Extract response data
+        response_data = {
+            "id": getattr(response, 'id', None),
+            "model": getattr(response, 'model', None),
+            "stop_reason": getattr(response, 'stop_reason', None),
+            "content": [],
+            "usage": {}
+        }
+
+        # Extract content blocks
+        if hasattr(response, 'content'):
+            for block in response.content:
+                try:
+                    if hasattr(block, 'model_dump'):
+                        # Pydantic models have model_dump()
+                        response_data["content"].append(block.model_dump())
+                    elif hasattr(block, 'dict'):
+                        # Or dict() method
+                        response_data["content"].append(block.dict())
+                    else:
+                        # Fallback: convert to dict manually
+                        block_dict = {
+                            "type": getattr(block, 'type', 'unknown'),
+                        }
+                        # Add type-specific fields
+                        if hasattr(block, 'text'):
+                            block_dict["text"] = block.text
+                        if hasattr(block, 'id'):
+                            block_dict["id"] = block.id
+                        if hasattr(block, 'name'):
+                            block_dict["name"] = block.name
+                        if hasattr(block, 'input'):
+                            block_dict["input"] = block.input
+                        response_data["content"].append(block_dict)
+                except Exception as e:
+                    # If all else fails, log a simple representation
+                    response_data["content"].append({
+                        "type": "error_serializing_block",
+                        "error": str(e),
+                        "block_type": type(block).__name__
+                    })
+
+        # Extract usage information
+        if hasattr(response, 'usage'):
+            response_data["usage"] = {
+                "input_tokens": getattr(response.usage, 'input_tokens', 0),
+                "output_tokens": getattr(response.usage, 'output_tokens', 0),
+                "cache_creation_input_tokens": getattr(response.usage, 'cache_creation_input_tokens', 0),
+                "cache_read_input_tokens": getattr(response.usage, 'cache_read_input_tokens', 0)
+            }
+
+        # Pretty-print JSON with 2-space indentation
+        formatted_response = json.dumps(response_data, indent=2, ensure_ascii=False)
+        self.api_call_logger.info(formatted_response)
+        self.api_call_logger.info("=" * 80)
+        self.api_call_logger.info("")  # Empty line for readability
+
     # ============== Helper Methods ==============
 
     def _format_pos(self, position: list) -> str:
@@ -371,7 +545,11 @@ class SimulationLogger:
 
     def close(self):
         """Close all log handlers."""
-        for logger in [self.llm_logger, self.robot_logger, self.app_logger, self.console_logger]:
+        loggers_to_close = [self.llm_logger, self.robot_logger, self.app_logger, self.interactive_logger, self.console_logger]
+        if self.api_call_logger:
+            loggers_to_close.append(self.api_call_logger)
+
+        for logger in loggers_to_close:
             for handler in logger.handlers:
                 handler.close()
                 logger.removeHandler(handler)
