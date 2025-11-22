@@ -53,7 +53,10 @@ class ObjectManager:
 
     def get_object_center_position(self, object_name):
         """
-        Returns the center position of an object.
+        Returns the true geometric center position of an object.
+
+        Calculates the center using AABB (axis-aligned bounding box) to ensure
+        accuracy regardless of URDF geometry offsets.
 
         Args:
             object_name: The name of the object (e.g., 'red_cube')
@@ -68,14 +71,13 @@ class ObjectManager:
 
         obj_id = self.objects[object_name]
 
-        obj_size = self.get_object_dimensions(obj_id)
-
-        base_pos, _ = p.getBasePositionAndOrientation(obj_id)
+        # Get AABB bounds and calculate true geometric center
+        aabb_min, aabb_max = p.getAABB(obj_id, -1)
 
         center_pos = [
-            base_pos[0],
-            base_pos[1],
-            base_pos[2] + obj_size[2] / 2.0
+            (aabb_min[0] + aabb_max[0]) / 2.0,
+            (aabb_min[1] + aabb_max[1]) / 2.0,
+            (aabb_min[2] + aabb_max[2]) / 2.0
         ]
 
         print(f"Object '{object_name}' center position: {center_pos}")

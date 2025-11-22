@@ -74,14 +74,14 @@ TARGET_VELOCITY = 0
 # Pick and place offsets
 OVER_TARGET_Z = 0.5
 
-PICK_CLOSE_OFFSET = 0.015
-PICK_TARGET_OFFSET = -0.025
+PICK_CLOSE_OFFSET = 0.04
+PICK_TARGET_OFFSET = 0.0  # Now using true geometric center (was -0.025 when center was incorrectly at top)
 
 PLACE_CLOSE_OFFSET = 0.065
 PLACE_TARGET_OFFSET = 0.025
 
 PLACE_ON_CLOSE_OFFSET = 0.065
-PLACE_ON_TARGET_OFFSET = 0.025
+PLACE_ON_TARGET_OFFSET = 0.05  # One cube height (0.05m) above center (was 0.025 when center was incorrectly at top)
 
 # Threshold distances
 THRESHOLD_OVER_TARGET = 0.025 #2.5cm
