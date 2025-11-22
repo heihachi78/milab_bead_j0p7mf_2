@@ -36,12 +36,12 @@ class LLMController:
         with open(filepath, 'r') as f:
             return f.read().strip()
 
-    def _find_latest_panorama(self, pattern: str = "panorama_*_initial_stabilized.png") -> str:
+    def _find_latest_panorama(self, pattern: str = "panorama_*_initial_stabilized.jpg") -> str:
         """
         Find the most recent panorama image matching the pattern.
 
         Args:
-            pattern: Glob pattern to match panorama files (default: "panorama_*_initial_stabilized.png")
+            pattern: Glob pattern to match panorama files (default: "panorama_*_initial_stabilized.jpg")
 
         Returns:
             Path to the most recently modified panorama file

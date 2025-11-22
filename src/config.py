@@ -141,3 +141,7 @@ LOG_SESSION_NAME = None  # None = auto-generate timestamp-based name
 # Interactive mode settings
 INTERACTIVE_MAX_TOKENS = 4096  # Max tokens for interactive LLM responses
 INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System prompt file for interactive mode
+
+# Prompt caching settings (for interactive mode)
+ENABLE_PROMPT_CACHING = True  # Enable/disable prompt caching for system prompt and tools
+PROMPT_CACHE_TTL = None  # None = 5 minutes (default), "1h" = 1 hour (costs 2x for cache writes)

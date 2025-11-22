@@ -161,7 +161,7 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create user message with image and text
+        # Create user message with image and text (with caching for panorama)
         user_content = [
             {
                 "type": "image",
@@ -170,6 +170,7 @@ class LLMValidator:
                     "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
+                "cache_control": {"type": "ephemeral"}  # Cache panorama image
             },
             {
                 "type": "text",
@@ -198,12 +199,16 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
-        # Extract token usage
+        # Extract token usage (including cache metrics)
         input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
         output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+        cache_creation_tokens = (response.usage.cache_creation_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_creation_input_tokens') else 0
+        cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
             self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
+            if cache_creation_tokens > 0 or cache_read_tokens > 0:
+                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
 
         # Parse JSON
         plan = self._parse_json_response(response_text)
@@ -238,7 +243,16 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create user message with image and text
+        # Prepare system prompt with caching (review prompt is static, called multiple times)
+        system_with_cache = [
+            {
+                "type": "text",
+                "text": self.review_system_prompt,
+                "cache_control": {"type": "ephemeral"}  # Cache static review prompt
+            }
+        ]
+
+        # Create user message with image and text (with caching for panorama)
         user_content = [
             {
                 "type": "image",
@@ -247,6 +261,7 @@ class LLMValidator:
                     "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
+                "cache_control": {"type": "ephemeral"}  # Cache panorama image
             },
             {
                 "type": "text",
@@ -261,7 +276,7 @@ class LLMValidator:
         response = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=self.review_system_prompt,
+            system=system_with_cache,  # type: ignore
             messages=[
                 {
                     "role": "user",
@@ -275,12 +290,16 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
-        # Extract token usage
+        # Extract token usage (including cache metrics)
         input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
         output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+        cache_creation_tokens = (response.usage.cache_creation_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_creation_input_tokens') else 0
+        cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
             self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
+            if cache_creation_tokens > 0 or cache_read_tokens > 0:
+                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
 
         # Parse JSON
         critique = self._parse_json_response(response_text)
@@ -328,7 +347,7 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create user message with image and text
+        # Create user message with image and text (with caching for panorama)
         user_content = [
             {
                 "type": "image",
@@ -337,6 +356,7 @@ class LLMValidator:
                     "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
+                "cache_control": {"type": "ephemeral"}  # Cache panorama image
             },
             {
                 "type": "text",
@@ -365,12 +385,16 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
-        # Extract token usage
+        # Extract token usage (including cache metrics)
         input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
         output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+        cache_creation_tokens = (response.usage.cache_creation_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_creation_input_tokens') else 0
+        cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
             self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
+            if cache_creation_tokens > 0 or cache_read_tokens > 0:
+                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
 
         # Parse JSON
         refined_plan = self._parse_json_response(response_text)

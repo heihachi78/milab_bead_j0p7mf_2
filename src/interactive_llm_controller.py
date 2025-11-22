@@ -455,12 +455,26 @@ Available objects in the scene can be queried using get_all_objects tool."""
         if self.logger:
             self.logger.log_interactive_message("user", user_message)
 
-        # Call Claude API with tools
+        # Prepare system prompt with caching
+        system_with_cache = [
+            {
+                "type": "text",
+                "text": self.system_prompt,
+                "cache_control": {"type": "ephemeral"}
+            }
+        ]
+
+        # Prepare tools with caching (mark last tool to cache all)
+        tools_with_cache = self.get_tool_definitions()
+        if tools_with_cache:
+            tools_with_cache[-1]["cache_control"] = {"type": "ephemeral"}
+
+        # Call Claude API with cached system + tools
         response = self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=self.system_prompt,
-            tools=self.get_tool_definitions(),
+            system=system_with_cache,  # type: ignore
+            tools=tools_with_cache,  # type: ignore
             messages=conversation_history
         )
 
@@ -470,6 +484,8 @@ Available objects in the scene can be queried using get_all_objects tool."""
         assistant_text_parts = []
         total_input_tokens = 0
         total_output_tokens = 0
+        total_cache_creation_tokens = 0
+        total_cache_read_tokens = 0
 
         # Continue until we get a response with no tool calls
         while True:
@@ -477,6 +493,12 @@ Available objects in the scene can be queried using get_all_objects tool."""
             if hasattr(response, 'usage'):
                 total_input_tokens += response.usage.input_tokens
                 total_output_tokens += response.usage.output_tokens
+
+                # Track cache usage if available
+                if hasattr(response.usage, 'cache_creation_input_tokens'):
+                    total_cache_creation_tokens += response.usage.cache_creation_input_tokens or 0
+                if hasattr(response.usage, 'cache_read_input_tokens'):
+                    total_cache_read_tokens += response.usage.cache_read_input_tokens or 0
             assistant_content = []
             current_tool_results = []
 
@@ -537,23 +559,31 @@ Available objects in the scene can be queried using get_all_objects tool."""
                 "content": tool_result_content
             })
 
-            # Get follow-up response from Claude
+            # Get follow-up response from Claude (with caching)
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=self.system_prompt,
-                tools=self.get_tool_definitions(),
+                system=system_with_cache,  # type: ignore
+                tools=tools_with_cache,  # type: ignore
                 messages=conversation_history
             )
 
         assistant_response = "\n".join(assistant_text_parts)
+
+        # Log cache performance if caching was used
+        if self.logger and (total_cache_creation_tokens > 0 or total_cache_read_tokens > 0):
+            self.logger.console_info(
+                f"Cache: {total_cache_read_tokens} tokens read, {total_cache_creation_tokens} tokens written"
+            )
 
         if self.logger:
             self.logger.log_interactive_message("assistant", assistant_response, total_input_tokens, total_output_tokens)
 
         token_usage = {
             "input_tokens": total_input_tokens,
-            "output_tokens": total_output_tokens
+            "output_tokens": total_output_tokens,
+            "cache_creation_input_tokens": total_cache_creation_tokens,
+            "cache_read_input_tokens": total_cache_read_tokens
         }
 
         return assistant_response, all_tool_results, panorama_base64, token_usage
