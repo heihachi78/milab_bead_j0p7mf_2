@@ -2,7 +2,7 @@ import numpy as np
 import pybullet as p
 import math
 from datetime import datetime
-from config import *
+from .config import *
 
 
 class RobotController:

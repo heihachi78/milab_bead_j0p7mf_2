@@ -1,0 +1,26 @@
+## Original Task
+
+{TASK_DESCRIPTION}
+
+## Current Scene Information
+
+{OBJECTS_INFO}
+
+## Original Plan (that needs improvement)
+
+```json
+{ORIGINAL_PLAN}
+```
+
+## Critique Feedback
+
+{CRITIQUE}
+
+## Your Refinement Task
+
+Based on the critique above, generate an improved plan that:
+1. Addresses all the issues mentioned in the feedback
+2. Correctly accomplishes the original task
+3. Is physically feasible and safe
+
+Analyze the panorama image to understand the current scene, then provide your refined plan in the specified JSON format.

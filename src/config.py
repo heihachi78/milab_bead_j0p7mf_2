@@ -121,3 +121,7 @@ CAMERA_PITCH_ANGLES = [0, 0, 0, 0, -89]  # Elevation angles (-89 for near-top vi
 
 # Panorama settings
 IMAGES_FOLDER = 'images'
+
+# LLM Validation settings
+MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles
+VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env

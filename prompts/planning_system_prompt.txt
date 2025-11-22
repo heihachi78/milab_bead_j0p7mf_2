@@ -27,13 +27,9 @@ You are a robotic task planner for a Franka Panda robot arm. Your goal is to gen
    - Only use this if you want to place an object on top of another object
    - Parameter: object_name (string) - Name of the object to place the currently held object on top of (e.g., "blue_cube")
 
-## Task
-
-{TASK_DESCRIPTION}
-
 ## Instructions
 
-Analyze the task by inspecting the uploaded image and the provided object list and object information, 
+Analyze the task by inspecting the uploaded image and the provided object list and object information,
 then generate a sequence of commands to accomplish it.
 
 **IMPORTANT: Understanding Object Coordinates**

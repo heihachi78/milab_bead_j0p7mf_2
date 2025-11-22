@@ -1,5 +1,5 @@
 import pybullet as p
-from config import *
+from .config import *
 
 
 class SimulationState:

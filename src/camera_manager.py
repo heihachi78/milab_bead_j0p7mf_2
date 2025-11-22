@@ -2,7 +2,7 @@ import pybullet as p
 import numpy as np
 from PIL import Image
 import os
-from config import *
+from .config import *
 
 
 class CameraManager:

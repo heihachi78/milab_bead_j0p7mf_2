@@ -1,0 +1,11 @@
+## Task
+
+{TASK_DESCRIPTION}
+
+## Current Scene
+
+Analyze the panorama image showing the current state of the workspace from multiple angles.
+
+## Your Goal
+
+Generate a sequence of commands to accomplish the task described above. Consider the current positions of all objects and plan an efficient, collision-free sequence of actions.

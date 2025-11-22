@@ -5,12 +5,13 @@ import pybullet as p
 import pybullet_data
 import os
 import glob
-from config import *
-from simulation_state import SimulationState
-from object_manager import ObjectManager
-from robot_controller import RobotController
-from camera_manager import CameraManager
-from llm_controller import LLMController
+from src.config import *
+from src.simulation_state import SimulationState
+from src.object_manager import ObjectManager
+from src.robot_controller import RobotController
+from src.camera_manager import CameraManager
+from src.llm_controller import LLMController
+from src.llm_validator import LLMValidator
 
 # Connect to PyBullet
 clid = p.connect(p.SHARED_MEMORY)
@@ -63,19 +64,26 @@ for i in range(STABILIZATION_LOOP_STEPS):
 # Capture initial panorama after stabilization
 camera_manager.capture_and_save_panorama("initial_stabilized")
 
-# Initialize LLM controller
+# Initialize LLM controller and validator
 llm_controller = LLMController(object_manager, robot_controller)
+llm_validator = LLMValidator(object_manager)
 
 # Main pick and place operations
 print(f"==========================================")
 print(f"simulation started t={simulation_state.t}")
 print(f"==========================================")
 
-# Generate plan using LLM
-plan = llm_controller.generate_plan()
+# Load task description
+task_description = llm_controller.task_description
 
-# Execute the plan
-llm_controller.execute_plan(plan)
+# Find the latest panorama
+panorama_path = llm_controller._find_latest_panorama()
+
+# Generate and validate plan using LangChain workflow
+validated_plan = llm_validator.get_validated_plan(task_description, panorama_path)
+
+# Execute the validated plan
+llm_controller.execute_plan(validated_plan)
 
 '''
 robot_controller.pick_up('green_cube')
