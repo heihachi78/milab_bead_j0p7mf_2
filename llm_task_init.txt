@@ -1,0 +1,1 @@
+Stack the blue cube on the red cube, then stack the green cube on top of the blue cube.

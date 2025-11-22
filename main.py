@@ -5,6 +5,7 @@ from simulation_state import SimulationState
 from object_manager import ObjectManager
 from robot_controller import RobotController
 from camera_manager import CameraManager
+from llm_controller import LLMController
 
 # Connect to PyBullet
 clid = p.connect(p.SHARED_MEMORY)
@@ -48,15 +49,25 @@ for i in range(STABILIZATION_LOOP_STEPS):
 # Capture initial panorama after stabilization
 camera_manager.capture_and_save_panorama("initial_stabilized")
 
+# Initialize LLM controller
+llm_controller = LLMController(object_manager, robot_controller)
+
 # Main pick and place operations
 print(f"==========================================")
 print(f"simulation started t={simulation_state.t}")
 print(f"==========================================")
 
+# Generate plan using LLM
+#plan = llm_controller.generate_plan()
+
+# Execute the plan
+#llm_controller.execute_plan(plan)
 robot_controller.pick_up('blue_cube')
-robot_controller.place(object_manager.get_object_center_position('red_cube'))
+robot_controller.place([-0.45, 0.45, 0])
+robot_controller.pick_up('red_cube')
+robot_controller.place_on('blue_cube')
 robot_controller.pick_up('green_cube')
-robot_controller.place(object_manager.get_object_center_position('blue_cube'))
+robot_controller.place_on('red_cube')
 
 print(f"==========================================")
 print(f"simulation ended t={simulation_state.t}")

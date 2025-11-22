@@ -144,6 +144,9 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
+        print(f"=== MOVE TO TARGET START === Target: {pos}, Threshold: {threshold}")
+        print(f"t={self.simulation_state.t}")
+
         prev_distance = 9999.9999
         s = 0
         max_iterations = MAX_ITERATIONS
@@ -214,10 +217,14 @@ class RobotController:
             distance_change = prev_distance - distance
 
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
+                print(f"=== MOVE TO TARGET END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
+                print(f"t={self.simulation_state.t}")
                 return ls[0]
 
             prev_distance = distance
 
+        print(f"=== MOVE TO TARGET END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
+        print(f"t={self.simulation_state.t}")
         return ls[0]
 
     def move_to_target_linear(self, pos, threshold):
@@ -279,20 +286,20 @@ class RobotController:
         print(f"=== PICK UP START === Object: {target_object}")
         print(f"t={self.simulation_state.t}")
 
-        target_pos = self.object_manager.get_object_center_position(target_object)
-        target_pos[2] += PICK_Z_OFFSET_DOWN
         over_target_pos = self.object_manager.get_object_center_position(target_object)
         over_target_pos[2] = OVER_TARGET_Z
         close_target_pos = self.object_manager.get_object_center_position(target_object)
-        close_target_pos[2] += PICK_Z_OFFSET_UP
+        close_target_pos[2] += PICK_CLOSE_OFFSET
+        target_pos = self.object_manager.get_object_center_position(target_object)
+        target_pos[2] += PICK_TARGET_OFFSET
+        
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.open_gripper()
-        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
         self.close_gripper()
         self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
-        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
 
         print("=== PICK UP END ===")
         print(f"t={self.simulation_state.t}")
@@ -301,6 +308,7 @@ class RobotController:
         if self.camera_manager is not None:
             self.camera_manager.capture_and_save_panorama(f"pickup_{target_object}")
 
+        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         return gripper_pos
 
     def place(self, place_position):
@@ -317,16 +325,16 @@ class RobotController:
         print(f"=== PLACE START === Position: {place_position}")
         print(f"t={self.simulation_state.t}")
 
-        target_pos = place_position.copy()
-        target_pos[2] += PLACE_Z_OFFSET_UP
         over_target_pos = place_position.copy()
         over_target_pos[2] = OVER_TARGET_Z
         close_target_pos = place_position.copy()
-        close_target_pos[2] += PLACE_Z_OFFSET_CLOSE
+        close_target_pos[2] += PLACE_CLOSE_OFFSET
+        target_pos = place_position.copy()
+        target_pos[2] += PLACE_TARGET_OFFSET
 
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
-        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
         self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
@@ -340,5 +348,43 @@ class RobotController:
             place_str = f"place_{place_position[0]:.2f}_{place_position[1]:.2f}_{place_position[2]:.2f}"
             self.camera_manager.capture_and_save_panorama(place_str)
 
-        gripper_pos = [0, 0, 0]
+        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        return gripper_pos
+
+    def place_on(self, target_object):
+        """
+        Places the currently grasped object on another object.
+
+        Args:
+            target_object: The object to place the held object on.
+
+        Returns:
+            gripper_pos: Final gripper position
+        """
+        print(f"=== PLACE_ON START === Target object: {target_object}")
+        print(f"t={self.simulation_state.t}")
+
+        over_target_pos = self.object_manager.get_object_center_position(target_object)
+        over_target_pos[2] = OVER_TARGET_Z
+        close_target_pos = self.object_manager.get_object_center_position(target_object)
+        close_target_pos[2] += PLACE_ON_CLOSE_OFFSET
+        target_pos = self.object_manager.get_object_center_position(target_object)
+        target_pos[2] += PLACE_ON_TARGET_OFFSET
+
+        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target_linear(target_pos, THRESHOLD_PRECISE_STRICT)
+        self.open_gripper()
+        self.move_to_target_linear(close_target_pos, THRESHOLD_PRECISE)
+        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        self.close_gripper()
+
+        print("=== PLACE ON END ===")
+        print(f"t={self.simulation_state.t}")
+
+        # Capture panorama after place on operation
+        if self.camera_manager is not None:
+            self.camera_manager.capture_and_save_panorama(f"place_on_{target_object}")
+
+        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         return gripper_pos
