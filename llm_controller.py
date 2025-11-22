@@ -184,6 +184,13 @@ class LLMController:
 
             print(f"Parsed plan:")
             print(json.dumps(plan, indent=2))
+
+            # Log reasoning if present
+            if 'reasoning' in plan:
+                print(f"\n--- LLM REASONING ---")
+                print(plan['reasoning'])
+                print(f"--- END LLM REASONING ---")
+
             print(f"=== LLM TASK PLANNING END ===\n")
 
             return plan
@@ -210,6 +217,12 @@ class LLMController:
 
         print(f"=== EXECUTE LLM PLAN START === Commands: {len(commands)}")
 
+        # Display reasoning if present
+        if 'reasoning' in plan:
+            print(f"\n--- EXECUTION REASONING ---")
+            print(plan['reasoning'])
+            print(f"--- END EXECUTION REASONING ---\n")
+
         for i, command in enumerate(commands, 1):
             action = command.get('action')
 
@@ -228,6 +241,14 @@ class LLMController:
 
                 print(f"\n--- Command {i}/{len(commands)}: place({position}) ---")
                 self.robot_controller.place(position)
+
+            elif action == 'place_on':
+                object_name = command.get('object')
+                if not object_name:
+                    raise ValueError(f"Command {i}: 'place_on' requires 'object' parameter")
+
+                print(f"\n--- Command {i}/{len(commands)}: place_on('{object_name}') ---")
+                self.robot_controller.place_on(object_name)
 
             else:
                 raise ValueError(f"Command {i}: Unknown action '{action}'")

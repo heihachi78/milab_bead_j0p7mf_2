@@ -227,6 +227,100 @@ class RobotController:
         print(f"t={self.simulation_state.t}")
         return ls[0]
 
+    def move_to_target_smooth(self, pos, threshold):
+        """
+        Moves to target position until convergence threshold is met.
+
+        Args:
+            pos: Target position [x, y, z]
+            threshold: Distance threshold for considering target reached
+
+        Returns:
+            gripper_pos: Final gripper position
+        """
+        print(f"=== MOVE TO TARGET START === Target: {pos}, Threshold: {threshold}")
+        print(f"t={self.simulation_state.t}")
+
+        prev_distance = 9999.9999
+        s = 0
+        max_iterations = MAX_ITERATIONS
+
+        while s < max_iterations:
+            s += 1
+
+            if self.useRealTimeSimulation:
+                dt = datetime.now()
+                self.simulation_state.t = (dt.second / 60.0) * 2.0 * math.pi
+            else:
+                self.simulation_state.step_time()
+
+            if self.useSimulation and self.useRealTimeSimulation == 0:
+                p.stepSimulation()
+                orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
+
+                if self.useNullSpace == 1:
+                    if self.useOrientation == 1:
+                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, pos, orn, self.ll, self.ul,
+                                                                  self.jr, self.rp)
+                    else:
+                        jointPoses = p.calculateInverseKinematics(self.armId,
+                                                                  self.endEffectorIndex,
+                                                                  pos,
+                                                                  lowerLimits=self.ll,
+                                                                  upperLimits=self.ul,
+                                                                  jointRanges=self.jr,
+                                                                  restPoses=self.rp)
+                else:
+                    if self.useOrientation == 1:
+                        jointPoses = p.calculateInverseKinematics(self.armId,
+                                                                  self.endEffectorIndex,
+                                                                  pos,
+                                                                  orn,
+                                                                  jointDamping=self.jd,
+                                                                  solver=self.ikSolver,
+                                                                  maxNumIterations=IK_MAX_ITERATIONS,
+                                                                  residualThreshold=IK_RESIDUAL_THRESHOLD)
+                    else:
+                        jointPoses = p.calculateInverseKinematics(self.armId,
+                                                                  self.endEffectorIndex,
+                                                                  pos,
+                                                                  solver=self.ikSolver)
+
+                if self.useSimulation:
+                    for i in range(NUM_ARM_JOINTS):
+                        p.setJointMotorControl2(bodyIndex=self.armId,
+                                                jointIndex=i,
+                                                controlMode=p.POSITION_CONTROL,
+                                                targetPosition=jointPoses[i],
+                                                targetVelocity=TARGET_VELOCITY,
+                                                force=ARM_MOTOR_FORCE,
+                                                positionGain=POSITION_GAIN,
+                                                velocityGain=VELOCITY_GAIN)
+                else:
+                    for i in range(NUM_ARM_JOINTS):
+                        p.resetJointState(self.armId, i, jointPoses[i])
+
+            ls = p.getLinkState(self.armId, self.endEffectorIndex)
+            if self.simulation_state.hasPrevPose:
+                p.addUserDebugLine(self.simulation_state.prevPose, pos, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+                p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
+            self.simulation_state.prevPose = pos
+            self.simulation_state.prevPose1 = ls[4]
+            self.simulation_state.hasPrevPose = 1
+            distance = np.linalg.norm(np.array(pos) - np.array(ls[0]))
+            distance_change = prev_distance - distance
+
+            if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
+                print(f"=== MOVE TO TARGET END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
+                print(f"t={self.simulation_state.t}")
+                return ls[0]
+
+            prev_distance = distance
+
+        print(f"=== MOVE TO TARGET END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
+        print(f"t={self.simulation_state.t}")
+        return ls[0]
+
     def move_to_target_linear(self, pos, threshold):
         """
         Moves to target position using linear interpolation through intermediate waypoints.

@@ -41,6 +41,8 @@ p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
 object_manager.load_cube('blue_cube', BLUE_CUBE_POS, BLUE_COLOR)
 object_manager.load_cube('red_cube', RED_CUBE_POS, RED_COLOR)
 object_manager.load_cube('green_cube', GREEN_CUBE_POS, GREEN_COLOR)
+object_manager.load_cube('yellow_cube', YELLOW_CUBE_POS, YELLOW_COLOR)
+object_manager.load_cube('purple_cube', PURPLE_CUBE_POS, PURPLE_COLOR)
 
 # Stabilization loop
 for i in range(STABILIZATION_LOOP_STEPS):
@@ -58,16 +60,18 @@ print(f"simulation started t={simulation_state.t}")
 print(f"==========================================")
 
 # Generate plan using LLM
-#plan = llm_controller.generate_plan()
+plan = llm_controller.generate_plan()
 
 # Execute the plan
-#llm_controller.execute_plan(plan)
+llm_controller.execute_plan(plan)
+'''
 robot_controller.pick_up('blue_cube')
 robot_controller.place([-0.45, 0.45, 0])
 robot_controller.pick_up('red_cube')
 robot_controller.place_on('blue_cube')
 robot_controller.pick_up('green_cube')
 robot_controller.place_on('red_cube')
+'''
 
 print(f"==========================================")
 print(f"simulation ended t={simulation_state.t}")

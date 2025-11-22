@@ -18,8 +18,14 @@ You are a robotic task planner for a Franka Panda robot arm. Your goal is to gen
 
 2. **place(position)**
    - Places the currently held object at the specified position
+   - Only use this if you want to place an object on the ground
    - Parameter: position (list) - [x, y, z] coordinates in meters where the CENTER of the object will be placed
-   - The z-coordinate specifies where the CENTER of the placed object will be, not its bottom
+   - The z-coordinate must be 0
+
+3. **place_on(object_name)**
+   - Places the currently held object at the top of the specified object
+   - Only use this if you want to place an object on top of another object
+   - Parameter: object_name (string) - Name of the object to place the currently held object on top of (e.g., "blue_cube")
 
 ## Task
 
@@ -27,29 +33,15 @@ You are a robotic task planner for a Franka Panda robot arm. Your goal is to gen
 
 ## Instructions
 
-Analyze the task and generate a sequence of commands to accomplish it.
+Analyze the task by inspecting the uploaded image and the provided object list and object information, 
+then generate a sequence of commands to accomplish it.
 
-**CRITICAL: Understanding Object Coordinates**
+**IMPORTANT: Understanding Object Coordinates**
 - All object positions represent the CENTER point of the object
 - When you see an object at position [x, y, z] with height h, this means:
   - The object's center is at height z
   - The object's bottom is at height z - h/2
   - The object's top is at height z + h/2
-
-**Stacking Rules**
-When stacking object A on top of object B:
-1. Find object B's center position [x_b, y_b, z_b]
-2. Use the SAME x and y coordinates: [x_b, y_b]
-3. Calculate the new z coordinate:
-   - Object B's top surface is at: z_b + height_b/2
-   - Object A's center should be at: z_b + height_b/2 + height_a/2
-   - Simplified formula: z_new = z_b + (height_b + height_a)/2
-4. Place object A at position [x_b, y_b, z_new]
-
-**Example Calculation:**
-- Object B at [0.25, 0.45, 0.05] with height 0.1
-- Object A (being placed) has height 0.1
-- Place position: [0.25, 0.45, 0.05 + (0.1 + 0.1)/2] = [0.25, 0.45, 0.15]
 
 ## Response Format
 
@@ -57,6 +49,7 @@ Respond with ONLY a valid JSON object in this exact format:
 
 ```json
 {{
+  "reasoning": "Explain why and how these commands will solve the problem. Describe your thought process and the logic behind your command sequence.",
   "commands": [
     {{"action": "pick_up", "object": "object_name"}},
     {{"action": "place", "position": [x, y, z]}},
@@ -65,79 +58,41 @@ Respond with ONLY a valid JSON object in this exact format:
 }}
 ```
 
+**Important:**
+- The "reasoning" field should contain a clear explanation of your approach to solving the task
+- Explain why you chose this particular sequence of commands
+- Describe how the commands work together to accomplish the goal
+
 ## Examples
 
-### Example 1: Stack A on B
-Task: Place the red cube on top of the blue cube.
-Objects:
-- red_cube at [0.3, 0.4, 0.05] with dimensions [0.1, 0.1, 0.1]
-- blue_cube at [0.5, 0.5, 0.05] with dimensions [0.1, 0.1, 0.1]
+### Example 1: Stacking Objects
+
+Task: Place the blue cube on top of the red cube.
 
 Solution:
 ```json
 {{
-  "commands": [
-    {{"action": "pick_up", "object": "red_cube"}},
-    {{"action": "place", "position": [0.5, 0.5, 0.15]}}
-  ]
-}}
-```
-Explanation:
-- Blue cube center is at [0.5, 0.5, 0.05]
-- Use blue cube's x, y: [0.5, 0.5]
-- Calculate z: 0.05 + (0.1 + 0.1)/2 = 0.05 + 0.1 = 0.15
-- Place red cube at blue cube's center position with adjusted height: [0.5, 0.5, 0.15]
-
-### Example 2: Sequential Stacking
-Task: Stack the green cube on the red cube, then stack the blue cube on top of the green cube.
-Objects:
-- green_cube at [0.2, 0.3, 0.05] with dimensions [0.1, 0.1, 0.1]
-- red_cube at [0.4, 0.4, 0.05] with dimensions [0.1, 0.1, 0.1]
-- blue_cube at [0.6, 0.5, 0.05] with dimensions [0.1, 0.1, 0.1]
-
-Solution:
-```json
-{{
-  "commands": [
-    {{"action": "pick_up", "object": "green_cube"}},
-    {{"action": "place", "position": [0.4, 0.4, 0.15]}},
-    {{"action": "pick_up", "object": "blue_cube"}},
-    {{"action": "place", "position": [0.4, 0.4, 0.25]}}
-  ]
-}}
-```
-Explanation:
-- Step 1: Place green on red
-  - Red cube center: [0.4, 0.4, 0.05]
-  - Use red's x, y: [0.4, 0.4]
-  - Calculate z: 0.05 + (0.1 + 0.1)/2 = 0.15
-  - Place green at red's center position: [0.4, 0.4, 0.15]
-- Step 2: Place blue on green
-  - Green cube is now at [0.4, 0.4, 0.15]
-  - Use green's x, y: [0.4, 0.4]
-  - Calculate z: 0.15 + (0.1 + 0.1)/2 = 0.25
-  - Place blue at green's center position: [0.4, 0.4, 0.25]
-
-### Example 3: Rearrangement
-Task: Move the blue cube to where the red cube is, and move the red cube to where the blue cube was.
-Objects:
-- blue_cube at [0.3, 0.3, 0.05] with dimensions [0.1, 0.1, 0.1]
-- red_cube at [0.5, 0.5, 0.05] with dimensions [0.1, 0.1, 0.1]
-
-Solution:
-```json
-{{
+  "reasoning": "To place the blue cube on top of the red cube, I need to first pick up the blue cube, then use the place_on command to place it on top of the red cube. The place_on command automatically calculates the correct position on top of the target object.",
   "commands": [
     {{"action": "pick_up", "object": "blue_cube"}},
-    {{"action": "place", "position": [0.5, 0.5, 0.05]}},
-    {{"action": "pick_up", "object": "red_cube"}},
-    {{"action": "place", "position": [0.3, 0.3, 0.05]}}
+    {{"action": "place_on", "object": "red_cube"}}
   ]
 }}
 ```
-Explanation:
-- Blue cube goes to red cube's center position: [0.5, 0.5, 0.05]
-- Red cube goes to blue cube's original center position: [0.3, 0.3, 0.05]
-- No height adjustment needed since they're placed on the ground (table), not stacked
+
+### Example 2: Placing on the Ground
+
+Task: Place the red cube on the ground.
+
+Solution:
+```json
+{{
+  "reasoning": "To place the red cube on the ground, I need to first pick it up, then use the place command with specific coordinates. The coordinates [-0.45, 0.45, 0] are chosen to be in a reachable location based on where other objects are positioned - not too far away but with enough distance to avoid collisions with other objects. The z-coordinate is 0 because the instructions explicitly state that when placing on the ground, the z-coordinate (which represents the CENTER of the object) must be 0.",
+  "commands": [
+    {{"action": "pick_up", "object": "red_cube"}},
+    {{"action": "place", "position": [-0.45, 0.45, 0]}}
+  ]
+}}
+```
 
 Now generate the command sequence for the given task.

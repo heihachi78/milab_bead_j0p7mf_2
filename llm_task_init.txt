@@ -1,1 +1,2 @@
-Stack the blue cube on the red cube, then stack the green cube on top of the blue cube.
+Create a stack that is in this order from bottom to up:
+blue cube, yellow cube, green cube, purple cube, red cube

@@ -48,12 +48,16 @@ TRAIL_DURATION = 15
 BLUE_CUBE_POS = [0.45, 0.50, 0.05]
 RED_CUBE_POS = [0.25, 0.45, 0.05]
 GREEN_CUBE_POS = [0.05, 0.40, 0.05]
+YELLOW_CUBE_POS = [-0.15, 0.35, 0.05]
+PURPLE_CUBE_POS = [-0.15, 0.35, 0.15]  # Stacked on top of yellow cube
 OBJECT_SCALE = 1
 
 # Object colors (RGBA)
 BLUE_COLOR = [0, 0, 1, 1]
 RED_COLOR = [1, 0, 0, 1]
 GREEN_COLOR = [0, 1, 0, 1]
+YELLOW_COLOR = [1, 1, 0, 1]
+PURPLE_COLOR = [0.5, 0, 0.5, 1]
 
 # Movement parameters
 MAX_ITERATIONS = 1000
