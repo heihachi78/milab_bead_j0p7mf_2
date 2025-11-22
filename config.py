@@ -84,7 +84,7 @@ PLACE_ON_CLOSE_OFFSET = 0.065
 PLACE_ON_TARGET_OFFSET = 0.05  # One cube height (0.05m) above center (was 0.025 when center was incorrectly at top)
 
 # Threshold distances
-THRESHOLD_OVER_TARGET = 0.025 #2.5cm
+THRESHOLD_OVER_TARGET = 0.04
 THRESHOLD_CLOSE_TARGET = 0.01 #1cm
 THRESHOLD_PRECISE_STRICT = 0.0005 #0.5mm
 THRESHOLD_PRECISE = 0.001 #1mm
