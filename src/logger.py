@@ -53,6 +53,13 @@ class SimulationLogger:
             logging.INFO
         )
 
+        # Interactive mode logger (for chat conversations and tool calls)
+        self.interactive_logger = self._create_logger(
+            "interactive",
+            f"{log_dir}/interactive_{session_name}.log",
+            logging.DEBUG
+        )
+
         # Console logger for important messages only
         self.console_logger = self._create_console_logger()
 
@@ -128,10 +135,13 @@ class SimulationLogger:
         self.llm_logger.info(user_prompt)
         self.llm_logger.info("=" * 80)
 
-    def log_llm_response(self, response: str, model: str = "unknown"):
-        """Log an LLM response."""
+    def log_llm_response(self, response: str, model: str = "unknown", input_tokens: int = None, output_tokens: int = None):
+        """Log an LLM response with optional token usage."""
         self.llm_logger.info("=" * 80)
         self.llm_logger.info(f"LLM RESPONSE | Model: {model}")
+        if input_tokens is not None and output_tokens is not None:
+            total_tokens = input_tokens + output_tokens
+            self.llm_logger.info(f"TOKEN USAGE | Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}")
         self.llm_logger.info("-" * 80)
         self.llm_logger.info(response)
         self.llm_logger.info("=" * 80)
@@ -284,6 +294,66 @@ class SimulationLogger:
     def console_progress(self, message: str):
         """Print progress update to console."""
         self.console_logger.info(f">> {message}")
+
+    # ============== Interactive Mode Logging Methods ==============
+
+    def log_interactive_message(self, role: str, content: str, input_tokens: int = None, output_tokens: int = None):
+        """
+        Log an interactive chat message with optional token usage.
+
+        Args:
+            role: Message role ("user" or "assistant")
+            content: Message content
+            input_tokens: Optional input token count (for assistant messages)
+            output_tokens: Optional output token count (for assistant messages)
+        """
+        self.interactive_logger.info("=" * 60)
+        self.interactive_logger.info(f"{role.upper()} MESSAGE")
+        if role == "assistant" and input_tokens is not None and output_tokens is not None:
+            total_tokens = input_tokens + output_tokens
+            self.interactive_logger.info(f"TOKEN USAGE | Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}")
+        self.interactive_logger.info("-" * 60)
+        self.interactive_logger.info(content)
+        self.interactive_logger.info("=" * 60)
+        self.interactive_logger.info("")  # Empty line for readability
+
+    def log_tool_call(self, tool_name: str, parameters: dict):
+        """
+        Log a tool call from the LLM.
+
+        Args:
+            tool_name: Name of the tool being called
+            parameters: Tool input parameters
+        """
+        self.interactive_logger.info("-" * 60)
+        self.interactive_logger.info(f"TOOL CALL: {tool_name}")
+        if parameters:
+            import json
+            self.interactive_logger.info(f"Parameters: {json.dumps(parameters, indent=2)}")
+        self.interactive_logger.info("-" * 60)
+
+    def log_tool_result(self, tool_name: str, result: dict):
+        """
+        Log the result of a tool call.
+
+        Args:
+            tool_name: Name of the tool that was executed
+            result: Tool execution result
+        """
+        import json
+        success = result.get("success", False)
+        status = "SUCCESS" if success else "FAILED"
+
+        self.interactive_logger.info(f"TOOL RESULT: {tool_name} | Status: {status}")
+
+        # Log full result (but truncate panorama data if present)
+        result_copy = result.copy()
+        if "panorama_base64" in result_copy:
+            result_copy["panorama_base64"] = f"<base64 data: {len(result_copy['panorama_base64'])} chars>"
+
+        self.interactive_logger.info(f"Result: {json.dumps(result_copy, indent=2)}")
+        self.interactive_logger.info("-" * 60)
+        self.interactive_logger.info("")  # Empty line for readability
 
     # ============== Helper Methods ==============
 

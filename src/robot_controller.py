@@ -47,6 +47,16 @@ class RobotController:
         # Gripper state tracking
         self.current_gripper_pos = GRIPPER_CLOSED_POSITION
 
+    def get_end_effector_position(self):
+        """
+        Get the current position of the end effector.
+
+        Returns:
+            list: Current end effector position [x, y, z]
+        """
+        ls = p.getLinkState(self.armId, self.endEffectorIndex)
+        return list(ls[0])
+
     def stabilize(self):
         """
         Reset robot to rest pose and stabilize with motors.

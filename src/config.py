@@ -127,6 +127,8 @@ CAMERA_PITCH_ANGLES = [0, 0, 0, 0, -89]  # Elevation angles (-89 for near-top vi
 
 # Panorama settings
 IMAGES_FOLDER = 'images'
+PANORAMA_FORMAT = 'JPEG'  # 'JPEG' or 'PNG' - JPEG uses less tokens for LLM API calls
+PANORAMA_QUALITY = 75  # JPEG quality (1-100, higher = better quality but larger file)
 
 # LLM Validation settings
 MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles
@@ -135,3 +137,7 @@ VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
 # Logging settings
 LOGS_FOLDER = 'logs'
 LOG_SESSION_NAME = None  # None = auto-generate timestamp-based name
+
+# Interactive mode settings
+INTERACTIVE_MAX_TOKENS = 4096  # Max tokens for interactive LLM responses
+INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System prompt file for interactive mode

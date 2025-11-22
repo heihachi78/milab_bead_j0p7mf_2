@@ -56,6 +56,17 @@ class LLMValidator:
         with open(image_path, 'rb') as f:
             return base64.standard_b64encode(f.read()).decode('utf-8')
 
+    def _get_image_media_type(self, image_path: str) -> str:
+        """Determine media type based on file extension."""
+        extension = Path(image_path).suffix.lower()
+        if extension in ['.jpg', '.jpeg']:
+            return 'image/jpeg'
+        elif extension == '.png':
+            return 'image/png'
+        else:
+            # Default to JPEG based on config
+            return 'image/jpeg' if config.PANORAMA_FORMAT == 'JPEG' else 'image/png'
+
     def _build_objects_info(self) -> tuple[str, str]:
         """
         Build objects list and info strings.
@@ -156,7 +167,7 @@ class LLMValidator:
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": "image/png",
+                    "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
             },
@@ -187,8 +198,12 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
+        # Extract token usage
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model)
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
 
         # Parse JSON
         plan = self._parse_json_response(response_text)
@@ -229,7 +244,7 @@ class LLMValidator:
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": "image/png",
+                    "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
             },
@@ -260,8 +275,12 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
+        # Extract token usage
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model)
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
 
         # Parse JSON
         critique = self._parse_json_response(response_text)
@@ -315,7 +334,7 @@ class LLMValidator:
                 "type": "image",
                 "source": {
                     "type": "base64",
-                    "media_type": "image/png",
+                    "media_type": self._get_image_media_type(panorama_path),
                     "data": image_data,
                 },
             },
@@ -346,8 +365,12 @@ class LLMValidator:
             if block.type == "text":
                 response_text += block.text
 
+        # Extract token usage
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model)
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
 
         # Parse JSON
         refined_plan = self._parse_json_response(response_text)

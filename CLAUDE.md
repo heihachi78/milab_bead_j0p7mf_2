@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is an LLM-controlled PyBullet robotics simulation for a Franka Panda robotic arm. The system uses Anthropic's Claude API to generate, validate, and execute pick-and-place task plans based on natural language descriptions and visual scene understanding through multi-camera panoramas.
 
+**The project supports two modes:**
+1. **Batch Mode** ([main.py](main.py)): Automated task execution with plan validation
+2. **Interactive Mode** ([main_interactive.py](main_interactive.py)): Real-time chat interface for conversational robot control
+
 ## Core Architecture
 
 ### Modular Component System
@@ -18,8 +22,9 @@ The codebase follows a clean separation of concerns with distinct manager classe
 - **[src/object_manager.py](src/object_manager.py)**: Object loading, tracking, and position/dimension queries
 - **[src/camera_manager.py](src/camera_manager.py)**: Multi-camera panorama capture from 5 viewpoints (front/right/back/left/top)
 - **[src/simulation_state.py](src/simulation_state.py)**: Simulation state tracking (time, debug visualization)
-- **[src/llm_controller.py](src/llm_controller.py)**: Executes validated action plans using robot primitives
-- **[src/llm_validator.py](src/llm_validator.py)**: LLM-based plan generation and iterative validation workflow
+- **[src/llm_controller.py](src/llm_controller.py)**: Executes validated action plans using robot primitives (batch mode)
+- **[src/llm_validator.py](src/llm_validator.py)**: LLM-based plan generation and iterative validation workflow (batch mode)
+- **[src/interactive_llm_controller.py](src/interactive_llm_controller.py)**: Interactive conversational controller with native tool calling (interactive mode)
 - **[src/logger.py](src/logger.py)**: Comprehensive logging for app events, LLM interactions, and robot operations
 
 ### LLM Validation Workflow
@@ -71,7 +76,7 @@ The LLM receives these panoramas for visual scene understanding during plan gene
 
 ## Development Commands
 
-### Running the Simulation
+### Running Batch Mode
 
 ```bash
 python main.py
@@ -86,13 +91,33 @@ Launches PyBullet GUI and executes the LLM-driven task pipeline:
 6. Execute validated plan
 7. Save logs and close
 
+### Running Interactive Mode
+
+```bash
+streamlit run main_interactive.py
+```
+
+Launches a Streamlit web interface with:
+1. PyBullet GUI for visual feedback
+2. Web chat interface at http://localhost:8501
+3. Real-time conversational robot control
+4. Natural language command execution via Claude LLM
+5. Sidebar with live scene information (object positions, gripper state)
+
+**Interactive Mode Features:**
+- Chat with Claude to control the robot in natural language
+- LLM uses 11 tools to query scene state and execute operations
+- On-demand panorama capture (only when LLM requests visual info)
+- Tool execution results displayed inline in chat
+- Conversation history maintained throughout session
+
 ### Installing Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Required dependencies include: `pybullet`, `anthropic`, `numpy`, `pillow`, `python-dotenv`
+Required dependencies include: `pybullet`, `anthropic`, `numpy`, `pillow`, `python-dotenv`, `streamlit`
 
 ### Virtual Environment
 
@@ -165,6 +190,28 @@ Edit files in [prompts/](prompts/):
 
 Prompts use template variables like `{OBJECTS_LIST}`, `{OBJECTS_INFO}`, `{TASK_DESCRIPTION}`.
 
+### Using Interactive Mode
+
+Launch the Streamlit interface:
+```bash
+streamlit run main_interactive.py
+```
+
+The web interface opens at `http://localhost:8501` with a chat interface. Example commands:
+- "What objects are in the scene?"
+- "Pick up the blue cube"
+- "Show me the scene" (triggers panorama capture)
+- "Move the gripper to [0.3, 0.4, 0.2]"
+- "Stack the red cube on the blue cube"
+
+The LLM has access to 12 tools:
+1. **Query Tools**: `get_gripper_position`, `get_gripper_state`, `get_object_position`, `get_all_objects`, `get_panorama`
+2. **Movement Tools**: `move_gripper`, `move_gripper_smooth`
+3. **Gripper Tools**: `open_gripper`, `close_gripper`
+4. **High-Level Tools**: `pick_up_object`, `place_object`, `place_on_object`
+
+Tool results are displayed inline in the chat interface. The sidebar shows real-time scene information.
+
 ### Adjusting Validation Rigor
 
 Increase `MAX_VALIDATION_ITERATIONS` in [src/config.py](src/config.py:132) for more thorough validation at the cost of additional API calls.
@@ -187,8 +234,12 @@ Control persistence with `TRAIL_DURATION` in [src/config.py](src/config.py:51).
 
 Logs are saved to `logs/` directory with timestamped filenames. The [src/logger.py](src/logger.py) provides:
 - `app_logger`: Application-level events (file handler)
+- `llm_logger`: LLM requests and responses (batch mode)
+- `robot_logger`: Robot operations and movements
+- `interactive_logger`: Interactive chat messages and tool calls (interactive mode)
 - Console output methods: `console_info()`, `console_progress()`, etc.
-- Structured logging for LLM requests/responses, robot operations, and validation workflow
+
+Structured logging includes LLM requests/responses, robot operations, validation workflow, and interactive tool usage.
 
 ### Panorama Images
 
@@ -203,3 +254,7 @@ Captured panoramas are saved to `images/` with sequential numbering. Review thes
 **Object registry**: [src/object_manager.py](src/object_manager.py) maintains a `name → PyBullet ID` mapping. Always use object names, not IDs, in high-level code.
 
 **Prompt-driven behavior**: The system's task execution is entirely driven by LLM interpretation of prompts. Changing prompts changes behavior without code modifications.
+
+**Dual execution modes**:
+- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans
+- **Interactive mode** ([main_interactive.py](main_interactive.py)): Conversational control using Claude's native tool calling API with 11 available tools. System prompt defined in [prompts/interactive_system_prompt.txt](prompts/interactive_system_prompt.txt).

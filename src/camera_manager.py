@@ -141,10 +141,20 @@ class CameraManager:
         Returns:
             str: Path to saved image
         """
-        filename = f"panorama_{self.panorama_counter:03d}_{operation_name}.png"
+        # Determine format and extension from config
+        format_type = PANORAMA_FORMAT if hasattr(globals(), 'PANORAMA_FORMAT') else 'JPEG'
+        extension = 'jpg' if format_type == 'JPEG' else 'png'
+
+        filename = f"panorama_{self.panorama_counter:03d}_{operation_name}.{extension}"
         filepath = os.path.join(self.images_folder, filename)
 
-        panorama.save(filepath)
+        # Save with format-specific options
+        if format_type == 'JPEG':
+            quality = PANORAMA_QUALITY if hasattr(globals(), 'PANORAMA_QUALITY') else 75
+            panorama.save(filepath, format='JPEG', quality=quality, optimize=True)
+        else:
+            panorama.save(filepath, format='PNG')
+
         if self.logger:
             self.logger.log_app_camera_capture("panorama", filename)
 
