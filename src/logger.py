@@ -150,6 +150,37 @@ class SimulationLogger:
             msg += f" | {details}"
         self.robot_logger.info(msg)
 
+    def log_robot_operation_start(self, operation: str, **params):
+        """
+        Log the start of a robot operation with all parameters.
+
+        Args:
+            operation: Name of the operation (e.g., "pick_up", "place", "move_to_target")
+            **params: All parameters relevant to this operation
+        """
+        self.robot_logger.info("=" * 60)
+        self.robot_logger.info(f"OPERATION START: {operation}")
+        if params:
+            for key, value in params.items():
+                if isinstance(value, (list, tuple)) and len(value) == 3:
+                    self.robot_logger.info(f"  {key}: {self._format_pos(list(value))}")
+                else:
+                    self.robot_logger.info(f"  {key}: {value}")
+        self.robot_logger.info("-" * 60)
+
+    def log_robot_operation_end(self, operation: str, success: bool = True):
+        """
+        Log the end of a robot operation.
+
+        Args:
+            operation: Name of the operation
+            success: Whether the operation completed successfully
+        """
+        status = "SUCCESS" if success else "FAILED"
+        self.robot_logger.info(f"OPERATION END: {operation} | Status: {status}")
+        self.robot_logger.info("=" * 60)
+        self.robot_logger.info("")  # Empty line for readability
+
     def log_robot_movement(self, target_pos: list, current_pos: list, distance: float):
         """Log robot movement details."""
         self.robot_logger.debug(

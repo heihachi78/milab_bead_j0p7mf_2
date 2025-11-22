@@ -169,6 +169,8 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
+        if self.logger:
+            self.logger.log_robot_operation_start("move_to_target", target_position=pos, threshold=threshold)
 
         prev_distance = 9999.9999
         s = 0
@@ -262,12 +264,14 @@ class RobotController:
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
+                    self.logger.log_robot_operation_end("move_to_target", success=True)
                 return ls[0]
 
             prev_distance = distance
 
         if self.logger:
             self.logger.log_robot_convergence(s, distance)
+            self.logger.log_robot_operation_end("move_to_target", success=True)
         return ls[0]
 
     def move_to_target_smooth(self, pos, threshold):
@@ -283,6 +287,9 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
+        if self.logger:
+            self.logger.log_robot_operation_start("move_to_target_smooth", target_position=pos, threshold=threshold, speed=LINEAR_MOVEMENT_SPEED)
+
         # Get initial position and starting time
         ls = p.getLinkState(self.armId, self.endEffectorIndex)
         start_pos = np.array(ls[0])
@@ -401,12 +408,14 @@ class RobotController:
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
+                    self.logger.log_robot_operation_end("move_to_target_smooth", success=True)
                 return ls[0]
 
             prev_distance = distance
 
         if self.logger:
             self.logger.log_robot_convergence(s, distance)
+            self.logger.log_robot_operation_end("move_to_target_smooth", success=True)
         return ls[0]
 
     def pick_up(self, target_object):
@@ -423,6 +432,7 @@ class RobotController:
         over_target_pos = self.object_manager.get_object_center_position(target_object)
 
         if self.logger:
+            self.logger.log_robot_operation_start("pick_up", object=target_object, object_position=over_target_pos)
             self.logger.log_robot_pick(target_object, over_target_pos)
         over_target_pos[2] = OVER_TARGET_Z
         close_target_pos = self.object_manager.get_object_center_position(target_object)
@@ -443,6 +453,10 @@ class RobotController:
             self.camera_manager.capture_and_save_panorama(f"pickup_{target_object}")
 
         gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+
+        if self.logger:
+            self.logger.log_robot_operation_end("pick_up", success=True)
+
         return gripper_pos
 
     def place(self, place_position):
@@ -457,6 +471,7 @@ class RobotController:
             gripper_pos: Final gripper position
         """
         if self.logger:
+            self.logger.log_robot_operation_start("place", position=place_position)
             self.logger.log_robot_place(place_position)
 
         over_target_pos = place_position.copy()
@@ -480,6 +495,10 @@ class RobotController:
             self.camera_manager.capture_and_save_panorama(place_str)
 
         gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+
+        if self.logger:
+            self.logger.log_robot_operation_end("place", success=True)
+
         return gripper_pos
 
     def place_on(self, target_object):
@@ -495,6 +514,7 @@ class RobotController:
         over_target_pos = self.object_manager.get_object_center_position(target_object)
 
         if self.logger:
+            self.logger.log_robot_operation_start("place_on", object=target_object, object_position=over_target_pos)
             self.logger.log_robot_place(over_target_pos, on_object=target_object)
 
         over_target_pos[2] = OVER_TARGET_Z
@@ -516,4 +536,8 @@ class RobotController:
             self.camera_manager.capture_and_save_panorama(f"place_on_{target_object}")
 
         gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+
+        if self.logger:
+            self.logger.log_robot_operation_end("place_on", success=True)
+
         return gripper_pos

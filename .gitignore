@@ -4,3 +4,4 @@ images/
 .env
 __pycache__
 logs/
+console.log
