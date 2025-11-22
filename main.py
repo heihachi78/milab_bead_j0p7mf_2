@@ -79,11 +79,10 @@ print(f"==========================================")
 
 
 robot_controller.pick_up('blue_cube')
-robot_controller.place([-0.45, 0.45, 0])
 robot_controller.pick_up('red_cube')
-robot_controller.place_on('blue_cube')
 robot_controller.pick_up('green_cube')
-robot_controller.place_on('red_cube')
+robot_controller.place([-0.45, 0.45, 0])
+
 
 print(f"==========================================")
 print(f"simulation ended t={simulation_state.t}")

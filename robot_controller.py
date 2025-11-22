@@ -334,7 +334,7 @@ class RobotController:
                 p.addUserDebugLine(self.simulation_state.prevPose, intermediate_pos_list, DEBUG_LINE_COLOR_1, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
                 p.addUserDebugLine(self.simulation_state.prevPose1, ls[4], DEBUG_LINE_COLOR_2, DEBUG_LINE_WIDTH, self.simulation_state.trailDuration)
             self.simulation_state.prevPose = intermediate_pos_list
-            self.simulation_state.prevPose1 = ls[4]
+            self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
             distance = np.linalg.norm(target_pos - np.array(ls[0]))
             distance_change = prev_distance - distance
