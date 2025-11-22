@@ -13,26 +13,26 @@ if (clid < 0):
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
 p.loadURDF("plane.urdf", [0, 0, -0.3])
-kukaId = p.loadURDF("kuka_iiwa/model.urdf", [0, 0, 0])
-p.resetBasePositionAndOrientation(kukaId, [0, 0, 0], [0, 0, 0, 1])
-kukaEndEffectorIndex = 6
-numJoints = p.getNumJoints(kukaId)
-if (numJoints != 7):
-  exit()
+pandaId = p.loadURDF("franka_panda/panda.urdf", [0, 0, 0], useFixedBase=True)
+p.resetBasePositionAndOrientation(pandaId, [0, 0, 0], [0, 0, 0, 1])
+pandaEndEffectorIndex = 11
+numJoints = p.getNumJoints(pandaId)
+print(f"Number of joints: {numJoints}")
 
-#lower limits for null space
-ll = [-.967, -2, -2.96, 0.19, -2.96, -2.09, -3.05]
+#lower limits for null space (Franka Panda limits)
+ll = [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
 #upper limits for null space
-ul = [.967, 2, 2.96, 2.29, 2.96, 2.09, 3.05]
+ul = [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]
 #joint ranges for null space
-jr = [5.8, 4, 5.8, 4, 5.8, 4, 6]
+jr = [5.8, 3.5, 5.8, 3.0, 5.8, 3.8, 5.8]
 #restposes for null space
-rp = [0, 0, 0, 0.5 * math.pi, 0, -math.pi * 0.5 * 0.66, 0]
+rp = [0, 0, 0, -1.5, 0, 1.5, 0]
 #joint damping coefficents
 jd = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
-for i in range(numJoints):
-  p.resetJointState(kukaId, i, rp[i])
+# Reset arm joints to rest poses
+for i in range(7):  # Only first 7 joints are arm joints
+  p.resetJointState(pandaId, i, rp[i])
 
 p.setGravity(0, 0, 0)
 t = 0.
@@ -41,7 +41,7 @@ prevPose1 = [0, 0, 0]
 hasPrevPose = 0
 useNullSpace = 1
 
-useOrientation = 1
+useOrientation = 0
 #If we set useSimulation=0, it sets the arm pose to be the IK result directly without using dynamic control.
 #This can be used to test the IK result accuracy.
 useSimulation = 1
@@ -79,11 +79,11 @@ while 1:
 
     if (useNullSpace == 1):
       if (useOrientation == 1):
-        jointPoses = p.calculateInverseKinematics(kukaId, kukaEndEffectorIndex, pos, orn, ll, ul,
+        jointPoses = p.calculateInverseKinematics(pandaId, pandaEndEffectorIndex, pos, orn, ll, ul,
                                                   jr, rp)
       else:
-        jointPoses = p.calculateInverseKinematics(kukaId,
-                                                  kukaEndEffectorIndex,
+        jointPoses = p.calculateInverseKinematics(pandaId,
+                                                  pandaEndEffectorIndex,
                                                   pos,
                                                   lowerLimits=ll,
                                                   upperLimits=ul,
@@ -91,8 +91,8 @@ while 1:
                                                   restPoses=rp)
     else:
       if (useOrientation == 1):
-        jointPoses = p.calculateInverseKinematics(kukaId,
-                                                  kukaEndEffectorIndex,
+        jointPoses = p.calculateInverseKinematics(pandaId,
+                                                  pandaEndEffectorIndex,
                                                   pos,
                                                   orn,
                                                   jointDamping=jd,
@@ -100,14 +100,14 @@ while 1:
                                                   maxNumIterations=100,
                                                   residualThreshold=.01)
       else:
-        jointPoses = p.calculateInverseKinematics(kukaId,
-                                                  kukaEndEffectorIndex,
+        jointPoses = p.calculateInverseKinematics(pandaId,
+                                                  pandaEndEffectorIndex,
                                                   pos,
                                                   solver=ikSolver)
 
     if (useSimulation):
-      for i in range(numJoints):
-        p.setJointMotorControl2(bodyIndex=kukaId,
+      for i in range(7):  # Only control first 7 joints (arm joints)
+        p.setJointMotorControl2(bodyIndex=pandaId,
                                 jointIndex=i,
                                 controlMode=p.POSITION_CONTROL,
                                 targetPosition=jointPoses[i],
@@ -117,10 +117,10 @@ while 1:
                                 velocityGain=1)
     else:
       #reset the joint state (ignoring all dynamics, not recommended to use during simulation)
-      for i in range(numJoints):
-        p.resetJointState(kukaId, i, jointPoses[i])
+      for i in range(7):  # Only reset first 7 joints (arm joints)
+        p.resetJointState(pandaId, i, jointPoses[i])
 
-  ls = p.getLinkState(kukaId, kukaEndEffectorIndex)
+  ls = p.getLinkState(pandaId, pandaEndEffectorIndex)
   if (hasPrevPose):
     p.addUserDebugLine(prevPose, pos, [0, 0, 0.3], 1, trailDuration)
     p.addUserDebugLine(prevPose1, ls[4], [1, 0, 0], 1, trailDuration)
