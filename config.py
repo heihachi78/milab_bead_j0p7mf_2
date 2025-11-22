@@ -24,7 +24,7 @@ GRAVITY = -9.81
 
 # Motor control settings
 ARM_MOTOR_FORCE = 500
-GRIPPER_MOTOR_FORCE = 20.0
+GRIPPER_MOTOR_FORCE = 150.0
 
 # Simulation timing
 STABILIZATION_STEPS = 100
@@ -60,14 +60,14 @@ YELLOW_COLOR = [1, 1, 0, 1]
 PURPLE_COLOR = [0.5, 0, 0.5, 1]
 
 # Movement parameters
-MAX_ITERATIONS = 1000
+MAX_ITERATIONS = 10000
 DISTANCE_CHANGE_THRESHOLD = 0.0001
-SMOOTH_MOVEMENT_SPEED_MULTIPLIER = 10.0  # Controls speed of smooth linear interpolation (higher = slower, more accurate)
+LINEAR_MOVEMENT_SPEED = 0.01  # meters per second for smooth straight-line movement (matches ex.py: t/10 with TIME_STEP=0.01)
 
 # IK solver parameters
 IK_MAX_ITERATIONS = 100
 IK_RESIDUAL_THRESHOLD = 0.01
-POSITION_GAIN = 0.01
+POSITION_GAIN = 0.03
 VELOCITY_GAIN = 1
 TARGET_VELOCITY = 0
 
