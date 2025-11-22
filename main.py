@@ -77,10 +77,12 @@ print(f"==========================================")
 # Execute the plan
 #llm_controller.execute_plan(plan)
 
+
 robot_controller.pick_up('green_cube')
 robot_controller.place([-0.45, 0.45, 0])
 robot_controller.pick_up('blue_cube')
 robot_controller.place_on('red_cube')
+
 
 print(f"==========================================")
 print(f"simulation ended t={simulation_state.t}")
