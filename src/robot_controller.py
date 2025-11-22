@@ -11,7 +11,7 @@ class RobotController:
     Encapsulates all robot control logic including IK, motion planning, and gripper control.
     """
 
-    def __init__(self, armId, endEffectorIndex, simulation_state, object_manager, camera_manager=None):
+    def __init__(self, armId, endEffectorIndex, simulation_state, object_manager, camera_manager=None, logger=None):
         """
         Initialize robot controller.
 
@@ -21,12 +21,14 @@ class RobotController:
             simulation_state: SimulationState instance for state tracking
             object_manager: ObjectManager instance for object queries
             camera_manager: CameraManager instance for panorama capture (optional)
+            logger: SimulationLogger instance for logging (optional)
         """
         self.armId = armId
         self.endEffectorIndex = endEffectorIndex
         self.simulation_state = simulation_state
         self.object_manager = object_manager
         self.camera_manager = camera_manager
+        self.logger = logger
 
         # Joint configuration
         self.ll = LOWER_LIMITS
@@ -46,7 +48,15 @@ class RobotController:
         self.current_gripper_pos = GRIPPER_CLOSED_POSITION
 
     def stabilize(self):
-        """Reset robot to rest pose and stabilize with motors."""
+        """
+        Reset robot to rest pose and stabilize with motors.
+
+        Resets all arm joints to rest positions and applies motor control
+        to stabilize the robot. Also initializes gripper in closed position.
+        Runs physics simulation for STABILIZATION_STEPS steps.
+        """
+        if self.logger:
+            self.logger.log_robot_stabilize(STABILIZATION_STEPS)
         for i in range(NUM_ARM_JOINTS):
             p.resetJointState(self.armId, i, self.rp[i])
 
@@ -73,14 +83,17 @@ class RobotController:
             p.stepSimulation()
 
     def open_gripper(self, force=GRIPPER_MOTOR_FORCE):
-        """Opens the gripper by moving both finger joints to their upper limits."""
-        print("=== OPEN GRIPPER START ===")
-        print(f"t={self.simulation_state.t}")
+        """
+        Opens the gripper by moving both finger joints to their upper limits.
 
-        #arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
-
+        Args:
+            force: Motor force to apply (default: GRIPPER_MOTOR_FORCE)
+        """
         # Update gripper state tracking
         self.current_gripper_pos = GRIPPER_OPEN_POSITION
+
+        if self.logger:
+            self.logger.log_robot_gripper("OPEN", GRIPPER_OPEN_POSITION)
 
         # Allow normal speed for gripper opening (no maxVelocity constraint)
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
@@ -107,18 +120,18 @@ class RobotController:
             self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
 
-        print("=== OPEN GRIPPER END ===")
-        print(f"t={self.simulation_state.t}")
-
     def close_gripper(self, force=GRIPPER_MOTOR_FORCE):
-        """Closes the gripper by moving both finger joints to their lower limits."""
-        print("=== CLOSE GRIPPER START ===")
-        print(f"t={self.simulation_state.t}")
+        """
+        Closes the gripper by moving both finger joints to their lower limits.
 
-        #arm_positions = [p.getJointState(self.armId, i)[0] for i in range(NUM_ARM_JOINTS)]
-
+        Args:
+            force: Motor force to apply (default: GRIPPER_MOTOR_FORCE)
+        """
         # Update gripper state tracking
         self.current_gripper_pos = GRIPPER_CLOSED_POSITION
+
+        if self.logger:
+            self.logger.log_robot_gripper("CLOSE", GRIPPER_CLOSED_POSITION)
 
         # Allow normal speed for gripper closing (no maxVelocity constraint)
         p.setJointMotorControl2(bodyUniqueId=self.armId, controlMode=p.POSITION_CONTROL,
@@ -145,9 +158,6 @@ class RobotController:
             self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
 
-        print("=== CLOSE GRIPPER END ===")
-        print(f"t={self.simulation_state.t}")
-
     def move_to_target(self, pos, threshold):
         """
         Moves to target position until convergence threshold is met.
@@ -159,8 +169,6 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== MOVE TO TARGET START === Target: {pos}, Threshold: {threshold}")
-        print(f"t={self.simulation_state.t}")
 
         prev_distance = 9999.9999
         s = 0
@@ -252,14 +260,14 @@ class RobotController:
             distance_change = prev_distance - distance
 
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
-                print(f"=== MOVE TO TARGET END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
-                print(f"t={self.simulation_state.t}")
+                if self.logger:
+                    self.logger.log_robot_convergence(s, distance)
                 return ls[0]
 
             prev_distance = distance
 
-        print(f"=== MOVE TO TARGET END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
-        print(f"t={self.simulation_state.t}")
+        if self.logger:
+            self.logger.log_robot_convergence(s, distance)
         return ls[0]
 
     def move_to_target_smooth(self, pos, threshold):
@@ -275,9 +283,6 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== MOVE TO TARGET SMOOTH START === Target: {pos}, Threshold: {threshold}")
-        print(f"t={self.simulation_state.t}")
-
         # Get initial position and starting time
         ls = p.getLinkState(self.armId, self.endEffectorIndex)
         start_pos = np.array(ls[0])
@@ -394,14 +399,14 @@ class RobotController:
             distance_change = prev_distance - distance
 
             if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
-                print(f"=== MOVE TO TARGET SMOOTH END === Result: CONVERGED, Final distance: {distance:.6f}, Iterations: {s}")
-                print(f"t={self.simulation_state.t}")
+                if self.logger:
+                    self.logger.log_robot_convergence(s, distance)
                 return ls[0]
 
             prev_distance = distance
 
-        print(f"=== MOVE TO TARGET SMOOTH END === Result: MAX_ITERATIONS_REACHED, Final distance: {distance:.6f}, Iterations: {s}")
-        print(f"t={self.simulation_state.t}")
+        if self.logger:
+            self.logger.log_robot_convergence(s, distance)
         return ls[0]
 
     def pick_up(self, target_object):
@@ -415,10 +420,10 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== PICK UP START === Object: {target_object}")
-        print(f"t={self.simulation_state.t}")
-
         over_target_pos = self.object_manager.get_object_center_position(target_object)
+
+        if self.logger:
+            self.logger.log_robot_pick(target_object, over_target_pos)
         over_target_pos[2] = OVER_TARGET_Z
         close_target_pos = self.object_manager.get_object_center_position(target_object)
         close_target_pos[2] += PICK_CLOSE_OFFSET
@@ -432,9 +437,6 @@ class RobotController:
         self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.close_gripper()
         self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
-
-        print("=== PICK UP END ===")
-        print(f"t={self.simulation_state.t}")
 
         # Capture panorama after pick up operation
         if self.camera_manager is not None:
@@ -454,8 +456,8 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== PLACE START === Position: {place_position}")
-        print(f"t={self.simulation_state.t}")
+        if self.logger:
+            self.logger.log_robot_place(place_position)
 
         over_target_pos = place_position.copy()
         over_target_pos[2] = OVER_TARGET_Z
@@ -468,12 +470,9 @@ class RobotController:
         self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
         self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
         self.open_gripper()
-        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE)
+        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.close_gripper()
-
-        print("=== PLACE END ===")
-        print(f"t={self.simulation_state.t}")
 
         # Capture panorama after place operation
         if self.camera_manager is not None:
@@ -493,10 +492,11 @@ class RobotController:
         Returns:
             gripper_pos: Final gripper position
         """
-        print(f"=== PLACE_ON START === Target object: {target_object}")
-        print(f"t={self.simulation_state.t}")
-
         over_target_pos = self.object_manager.get_object_center_position(target_object)
+
+        if self.logger:
+            self.logger.log_robot_place(over_target_pos, on_object=target_object)
+
         over_target_pos[2] = OVER_TARGET_Z
         close_target_pos = self.object_manager.get_object_center_position(target_object)
         close_target_pos[2] += PLACE_ON_CLOSE_OFFSET
@@ -510,9 +510,6 @@ class RobotController:
         self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
         self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
         self.close_gripper()
-
-        print("=== PLACE ON END ===")
-        print(f"t={self.simulation_state.t}")
 
         # Capture panorama after place on operation
         if self.camera_manager is not None:

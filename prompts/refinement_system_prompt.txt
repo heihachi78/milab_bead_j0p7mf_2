@@ -38,6 +38,8 @@ You have received a task plan that has been reviewed and found to have issues. Y
 
 ## Response Format
 
+**CRITICAL: Your response must contain ONLY the JSON object and nothing else. Do not include any explanatory text, commentary, or additional content before or after the JSON. The entire response must be valid JSON that can be parsed directly.**
+
 Respond with ONLY a valid JSON object in this exact format:
 
 ```json

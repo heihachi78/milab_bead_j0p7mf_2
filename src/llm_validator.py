@@ -5,24 +5,24 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
-from langchain_anthropic import ChatAnthropic
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage
+import anthropic
 
 from . import config
 
 
 class LLMValidator:
-    """LangChain-based validator for robot task plans with self-review and refinement."""
+    """Anthropic-based validator for robot task plans with self-review and refinement."""
 
-    def __init__(self, object_manager):
+    def __init__(self, object_manager, logger=None):
         """
         Initialize the LLM validator.
 
         Args:
             object_manager: ObjectManager instance for querying object positions
+            logger: SimulationLogger instance for logging (optional)
         """
         self.object_manager = object_manager
+        self.logger = logger
 
         # Load environment variables
         load_dotenv()
@@ -33,12 +33,9 @@ class LLMValidator:
         # Get model from config or environment
         self.model = config.VALIDATION_MODEL if hasattr(config, 'VALIDATION_MODEL') and config.VALIDATION_MODEL else os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-5-20250929')
 
-        # Initialize Anthropic chat model
-        self.llm = ChatAnthropic(
-            api_key=self.api_key,
-            model=self.model,
-            max_tokens=2048
-        )
+        # Initialize Anthropic client
+        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.max_tokens = 2048
 
         # Load prompt templates
         self.planning_system_prompt = self._load_file('planning_system_prompt.txt')
@@ -87,7 +84,7 @@ class LLMValidator:
 
     def _parse_json_response(self, response_text: str) -> Dict[str, Any]:
         """
-        Parse JSON from LLM response, handling markdown code blocks.
+        Parse JSON from LLM response, handling markdown code blocks and extra text.
 
         Args:
             response_text: Raw text response from LLM
@@ -105,7 +102,20 @@ class LLMValidator:
             json_end = response_text.find("```", json_start)
             json_str = response_text[json_start:json_end].strip()
         else:
+            # Try to extract JSON object by finding the first { and matching }
             json_str = response_text.strip()
+            if json_str.startswith('{'):
+                # Count braces to find the end of the JSON object
+                brace_count = 0
+                for i, char in enumerate(json_str):
+                    if char == '{':
+                        brace_count += 1
+                    elif char == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            # Found the end of the JSON object
+                            json_str = json_str[:i+1]
+                            break
 
         return json.loads(json_str)
 
@@ -120,8 +130,8 @@ class LLMValidator:
         Returns:
             Parsed plan dictionary
         """
-        print(f"\n=== GENERATING INITIAL PLAN ===")
-        print(f"Task: {task_description}")
+        if self.logger:
+            self.logger.console_info("Generating initial plan...")
 
         # Build object info
         objects_list, objects_info = self._build_objects_info()
@@ -140,45 +150,48 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create message with image and text
-        messages = [
+        # Create user message with image and text
+        user_content = [
             {
-                "role": "system",
-                "content": system_prompt
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data,
+                },
             },
             {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": user_prompt_text
-                    }
-                ]
+                "type": "text",
+                "text": user_prompt_text
             }
         ]
 
-        # Call LLM
-        print(f"Calling LLM for plan generation...")
-        response = self.llm.invoke(messages)
-        response_text = response.content
+        # Call Anthropic API
+        if self.logger:
+            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model)
 
-        print(f"\n--- INITIAL PLAN RESPONSE ---")
-        print(response_text)
-        print(f"--- END INITIAL PLAN RESPONSE ---\n")
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        )
+        # Extract text from response content blocks
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text += block.text
+
+        if self.logger:
+            self.logger.log_llm_response(response_text, self.model)
 
         # Parse JSON
         plan = self._parse_json_response(response_text)
-
-        print(f"Parsed initial plan:")
-        print(json.dumps(plan, indent=2))
 
         return plan
 
@@ -194,7 +207,8 @@ class LLMValidator:
         Returns:
             Critique dictionary with is_valid, critique, suggestions
         """
-        print(f"\n=== CRITIQUING PLAN ===")
+        if self.logger:
+            self.logger.console_info("Reviewing plan...")
 
         # Build object info
         objects_list, objects_info = self._build_objects_info()
@@ -209,45 +223,48 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create messages
-        messages = [
+        # Create user message with image and text
+        user_content = [
             {
-                "role": "system",
-                "content": self.review_system_prompt
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data,
+                },
             },
             {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": user_prompt_text
-                    }
-                ]
+                "type": "text",
+                "text": user_prompt_text
             }
         ]
 
-        # Call LLM
-        print(f"Calling LLM for critique...")
-        response = self.llm.invoke(messages)
-        response_text = response.content
+        # Call Anthropic API
+        if self.logger:
+            self.logger.log_llm_request(self.review_system_prompt, user_prompt_text, self.model)
 
-        print(f"\n--- CRITIQUE RESPONSE ---")
-        print(response_text)
-        print(f"--- END CRITIQUE RESPONSE ---\n")
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self.review_system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        )
+        # Extract text from response content blocks
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text += block.text
+
+        if self.logger:
+            self.logger.log_llm_response(response_text, self.model)
 
         # Parse JSON
         critique = self._parse_json_response(response_text)
-
-        print(f"Parsed critique:")
-        print(json.dumps(critique, indent=2))
 
         return critique
 
@@ -264,7 +281,8 @@ class LLMValidator:
         Returns:
             Refined plan dictionary
         """
-        print(f"\n=== REFINING PLAN ===")
+        if self.logger:
+            self.logger.console_info("Refining plan based on review feedback...")
 
         # Build object info
         objects_list, objects_info = self._build_objects_info()
@@ -291,45 +309,48 @@ class LLMValidator:
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create messages
-        messages = [
+        # Create user message with image and text
+        user_content = [
             {
-                "role": "system",
-                "content": system_prompt
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": image_data,
+                },
             },
             {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "image/png",
-                            "data": image_data,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": user_prompt_text
-                    }
-                ]
+                "type": "text",
+                "text": user_prompt_text
             }
         ]
 
-        # Call LLM
-        print(f"Calling LLM for refinement...")
-        response = self.llm.invoke(messages)
-        response_text = response.content
+        # Call Anthropic API
+        if self.logger:
+            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model)
 
-        print(f"\n--- REFINEMENT RESPONSE ---")
-        print(response_text)
-        print(f"--- END REFINEMENT RESPONSE ---\n")
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        )
+        # Extract text from response content blocks
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text += block.text
+
+        if self.logger:
+            self.logger.log_llm_response(response_text, self.model)
 
         # Parse JSON
         refined_plan = self._parse_json_response(response_text)
-
-        print(f"Parsed refined plan:")
-        print(json.dumps(refined_plan, indent=2))
 
         return refined_plan
 
@@ -337,7 +358,7 @@ class LLMValidator:
         """
         Generate and validate a plan through iterative critique and refinement.
 
-        This is the main entry point that orchestrates the entire LangChain workflow:
+        This is the main entry point that orchestrates the entire validation workflow:
         1. Generate initial plan
         2. Critique the plan
         3. If not valid, refine based on critique
@@ -355,48 +376,33 @@ class LLMValidator:
         if max_iterations is None:
             max_iterations = config.MAX_VALIDATION_ITERATIONS if hasattr(config, 'MAX_VALIDATION_ITERATIONS') else 3
 
-        print(f"\n{'='*60}")
-        print(f"=== LLM VALIDATION WORKFLOW START ===")
-        print(f"{'='*60}")
-        print(f"Task: {task_description}")
-        print(f"Max iterations: {max_iterations}")
-
         # Step 1: Generate initial plan
         current_plan = self._generate_initial_plan(task_description, panorama_path)
 
         # Step 2-N: Critique and refine loop
         for iteration in range(max_iterations):
-            print(f"\n{'='*60}")
-            print(f"=== VALIDATION ITERATION {iteration + 1}/{max_iterations} ===")
-            print(f"{'='*60}")
 
             # Critique the current plan
             critique = self._critique_plan(current_plan, task_description, panorama_path)
 
             # Check if plan is valid
             if critique.get('is_valid', False):
-                print(f"\n{'='*60}")
-                print(f"=== PLAN VALIDATED SUCCESSFULLY ===")
-                print(f"{'='*60}")
-                print(f"Iterations needed: {iteration + 1}")
-                print(f"\nFinal plan:")
-                print(json.dumps(current_plan, indent=2))
+                if self.logger:
+                    self.logger.log_app_plan_validated(f"Valid after {iteration + 1} iteration(s)")
+                    self.logger.console_info(f">> Plan validated successfully (iteration {iteration + 1})")
+
                 return current_plan
 
             # Plan needs refinement
-            print(f"\nPlan not valid. Issues found:")
-            print(f"Critique: {critique.get('critique', 'N/A')}")
-            print(f"Suggestions: {critique.get('suggestions', [])}")
+            if self.logger:
+                self.logger.log_app_warning(f"Plan validation iteration {iteration + 1}: Issues found")
+                self.logger.console_info(f">> Plan needs refinement (iteration {iteration + 1}/{max_iterations})")
 
             # If this is the last iteration, return current plan with warning
             if iteration == max_iterations - 1:
-                print(f"\n{'='*60}")
-                print(f"=== MAX ITERATIONS REACHED ===")
-                print(f"{'='*60}")
-                print(f"WARNING: Plan could not be validated within {max_iterations} iterations.")
-                print(f"Returning best attempt plan.")
-                print(f"\nFinal plan:")
-                print(json.dumps(current_plan, indent=2))
+                if self.logger:
+                    self.logger.log_app_warning(f"Max validation iterations ({max_iterations}) reached. Using best attempt.")
+                    self.logger.console_info(f"Plan validation completed (max iterations reached)")
                 return current_plan
 
             # Refine the plan

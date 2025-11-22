@@ -33,6 +33,8 @@ You are an expert robotics plan reviewer for a Franka Panda robot arm. Your goal
 
 ## Response Format
 
+**CRITICAL: Your response must contain ONLY the JSON object and nothing else. Do not include any explanatory text, commentary, or additional content before or after the JSON. The entire response must be valid JSON that can be parsed directly.**
+
 Respond with ONLY a valid JSON object in this exact format:
 
 ```json

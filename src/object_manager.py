@@ -8,9 +8,10 @@ class ObjectManager:
     Maintains a registry of objects and provides methods to interact with them.
     """
 
-    def __init__(self):
+    def __init__(self, logger=None):
         """Initialize object manager with empty registry."""
         self.objects = {}
+        self.logger = logger
 
     def load_cube(self, name, position, color, scale=OBJECT_SCALE):
         """
@@ -28,7 +29,8 @@ class ObjectManager:
         obj_id = p.loadURDF("cube_small.urdf", basePosition=position, globalScaling=scale)
         p.changeVisualShape(obj_id, GRIPPER_LINK_INDEX, rgbaColor=color)
         self.objects[name] = obj_id
-        print(f"Loaded object '{name}' with ID {obj_id}")
+        if self.logger:
+            self.logger.log_app_object_loaded(name, position)
         return obj_id
 
     def get_object_dimensions(self, obj_id):
@@ -48,7 +50,6 @@ class ObjectManager:
         height = aabb_max[2] - aabb_min[2]
 
         return_size = [width, depth, height]
-        print(f"Object {obj_id} size (AABB): {return_size}")
         return return_size
 
     def get_object_center_position(self, object_name):
@@ -79,8 +80,6 @@ class ObjectManager:
             (aabb_min[1] + aabb_max[1]) / 2.0,
             (aabb_min[2] + aabb_max[2]) / 2.0
         ]
-
-        print(f"Object '{object_name}' center position: {center_pos}")
 
         return center_pos
 

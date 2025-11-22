@@ -3,3 +3,4 @@ __pycache__
 images/
 .env
 __pycache__
+logs/

@@ -11,8 +11,9 @@ class CameraManager:
     and creating panorama images.
     """
 
-    def __init__(self):
+    def __init__(self, logger=None):
         """Initialize camera manager with configuration from config.py"""
+        self.logger = logger
         self.target_position = CAMERA_TARGET_POSITION
         self.distance = CAMERA_DISTANCE
         self.width = CAMERA_IMAGE_WIDTH
@@ -84,13 +85,10 @@ class CameraManager:
         images = []
         directions = ['front', 'right', 'back', 'left', 'top']
 
-        print("=== CAPTURING MULTI-CAMERA IMAGES ===")
         for i, (yaw, pitch) in enumerate(zip(self.yaw_angles, self.pitch_angles)):
-            print(f"Capturing {directions[i]} view (yaw={yaw}, pitch={pitch})")
             img = self.capture_image(yaw, pitch)
             images.append(img)
 
-        print(f"Captured {len(images)} images")
         return images
 
     def create_panorama(self, images):
@@ -147,7 +145,8 @@ class CameraManager:
         filepath = os.path.join(self.images_folder, filename)
 
         panorama.save(filepath)
-        print(f"Saved panorama: {filepath}")
+        if self.logger:
+            self.logger.log_app_camera_capture("panorama", filename)
 
         self.panorama_counter += 1
         return filepath
@@ -162,17 +161,13 @@ class CameraManager:
         Returns:
             str: Path to saved panorama image
         """
-        print(f"\n=== CREATING PANORAMA FOR '{operation_name}' ===")
-
         # Capture images from all angles
         images = self.capture_multi_camera()
 
         # Create panorama
-        print("Creating panorama layout...")
         panorama = self.create_panorama(images)
 
         # Save panorama
         filepath = self.save_panorama(panorama, operation_name)
 
-        print(f"=== PANORAMA COMPLETE ===\n")
         return filepath

@@ -1,4 +1,10 @@
-# Configuration file for robot simulation parameters
+"""
+Configuration file for robot simulation parameters.
+
+This module contains all centralized configuration values for the PyBullet
+robotics simulation including robot parameters, physics settings, object
+positions, movement thresholds, and camera configuration.
+"""
 
 # Robot configuration
 END_EFFECTOR_INDEX = 11
@@ -68,7 +74,7 @@ LINEAR_MOVEMENT_SPEED = 0.01  # meters per second for smooth straight-line movem
 IK_MAX_ITERATIONS = 1000
 IK_RESIDUAL_THRESHOLD = 0.001
 POSITION_GAIN = 0.03
-POSITION_GAIN_SMOOTH = 0.1
+POSITION_GAIN_SMOOTH = 0.3
 VELOCITY_GAIN = 1
 TARGET_VELOCITY = 0
 
@@ -125,3 +131,7 @@ IMAGES_FOLDER = 'images'
 # LLM Validation settings
 MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles
 VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
+
+# Logging settings
+LOGS_FOLDER = 'logs'
+LOG_SESSION_NAME = None  # None = auto-generate timestamp-based name

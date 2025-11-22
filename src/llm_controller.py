@@ -6,28 +6,49 @@ from typing import Dict, Any
 class LLMController:
     """Controller for LLM-based robot task planning and execution."""
 
-    def __init__(self, object_manager, robot_controller):
+    def __init__(self, object_manager, robot_controller, logger=None):
         """
         Initialize the LLM controller.
 
         Args:
             object_manager: ObjectManager instance for querying object positions
             robot_controller: RobotController instance for executing commands
+            logger: SimulationLogger instance for logging (optional)
         """
         self.object_manager = object_manager
         self.robot_controller = robot_controller
+        self.logger = logger
 
         # Load task description
         self.task_description = self._load_file('llm_task_init.txt')
 
     def _load_file(self, filename: str) -> str:
-        """Load text file content from prompts folder."""
+        """
+        Load text file content from prompts folder.
+
+        Args:
+            filename: Name of the file to load from prompts directory
+
+        Returns:
+            Stripped content of the file as a string
+        """
         filepath = Path(__file__).parent.parent / 'prompts' / filename
         with open(filepath, 'r') as f:
             return f.read().strip()
 
     def _find_latest_panorama(self, pattern: str = "panorama_*_initial_stabilized.png") -> str:
-        """Find the most recent panorama image matching the pattern."""
+        """
+        Find the most recent panorama image matching the pattern.
+
+        Args:
+            pattern: Glob pattern to match panorama files (default: "panorama_*_initial_stabilized.png")
+
+        Returns:
+            Path to the most recently modified panorama file
+
+        Raises:
+            FileNotFoundError: If images directory doesn't exist or no matching files found
+        """
         images_dir = Path(__file__).parent.parent / "images"
         if not images_dir.exists():
             raise FileNotFoundError(f"Images directory not found: {images_dir}")
@@ -55,13 +76,8 @@ class LLMController:
 
         commands = plan['commands']
 
-        print(f"=== EXECUTE LLM PLAN START === Commands: {len(commands)}")
-
-        # Display reasoning if present
-        if 'reasoning' in plan:
-            print(f"\n--- EXECUTION REASONING ---")
-            print(plan['reasoning'])
-            print(f"--- END EXECUTION REASONING ---\n")
+        if self.logger:
+            self.logger.app_logger.info(f"Executing plan with {len(commands)} commands")
 
         for i, command in enumerate(commands, 1):
             action = command.get('action')
@@ -71,7 +87,8 @@ class LLMController:
                 if not object_name:
                     raise ValueError(f"Command {i}: 'pick_up' requires 'object' parameter")
 
-                print(f"\n--- Command {i}/{len(commands)}: pick_up('{object_name}') ---")
+                if self.logger:
+                    self.logger.console_progress(f"Executing command {i}/{len(commands)}: pick_up({object_name})")
                 self.robot_controller.pick_up(object_name)
 
             elif action == 'place':
@@ -79,7 +96,8 @@ class LLMController:
                 if not position or len(position) != 3:
                     raise ValueError(f"Command {i}: 'place' requires 'position' parameter as [x, y, z]")
 
-                print(f"\n--- Command {i}/{len(commands)}: place({position}) ---")
+                if self.logger:
+                    self.logger.console_progress(f"Executing command {i}/{len(commands)}: place({position})")
                 self.robot_controller.place(position)
 
             elif action == 'place_on':
@@ -87,10 +105,9 @@ class LLMController:
                 if not object_name:
                     raise ValueError(f"Command {i}: 'place_on' requires 'object' parameter")
 
-                print(f"\n--- Command {i}/{len(commands)}: place_on('{object_name}') ---")
+                if self.logger:
+                    self.logger.console_progress(f"Executing command {i}/{len(commands)}: place_on({object_name})")
                 self.robot_controller.place_on(object_name)
 
             else:
                 raise ValueError(f"Command {i}: Unknown action '{action}'")
-
-        print(f"=== EXECUTE LLM PLAN END ===")
