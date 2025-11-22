@@ -357,7 +357,7 @@ class RobotController:
                                                 targetPosition=jointPoses[i],
                                                 targetVelocity=TARGET_VELOCITY,
                                                 force=ARM_MOTOR_FORCE,
-                                                positionGain=POSITION_GAIN,
+                                                positionGain=POSITION_GAIN_SMOOTH,
                                                 velocityGain=VELOCITY_GAIN)
 
                     # Maintain gripper position during arm movement with stronger control
