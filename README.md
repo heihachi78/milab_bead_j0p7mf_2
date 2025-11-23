@@ -23,13 +23,15 @@ An intelligent robotic simulation system that uses Claude AI to plan and execute
 
 ## Overview
 
-This project implements two distinct modes of LLM-controlled robotic manipulation:
+This project implements three execution modes for LLM-controlled robotic manipulation:
 
 1. **Batch Mode** ([main.py](main.py)): Fully automated task execution with a sophisticated plan validation pipeline. The system uses a critique-refinement loop to iteratively improve task plans before execution.
 
 2. **Interactive Mode** ([main_interactive.py](main_interactive.py)): Real-time conversational control through a web-based chat interface. Uses Claude's native tool-calling API to enable natural language robot commands.
 
-Both modes leverage Claude's multimodal capabilities, processing panoramic images alongside natural language to understand the 3D scene and plan collision-free manipulation strategies.
+3. **Visual Server Mode** ([main_visual.py](main_visual.py)): PyBullet GUI server that enables visualization for interactive mode on macOS. Required due to macOS threading restrictions.
+
+All modes leverage Claude's multimodal capabilities, processing panoramic images alongside natural language to understand the 3D scene and plan collision-free manipulation strategies.
 
 ## Features
 
@@ -53,16 +55,31 @@ cd <repository-directory>
 
 ### 2. Create Virtual Environment
 
+**Using venv (standard):**
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
+**Using conda (recommended for macOS):**
+```bash
+conda create -n pybullet_env python=3.11
+conda activate pybullet_env
+```
+
 ### 3. Install Dependencies
 
+**Using pip:**
 ```bash
 pip install -r requirements.txt
 ```
+
+**Using conda (macOS - recommended):**
+```bash
+conda install -c conda-forge pybullet anthropic numpy pillow pyyaml python-dotenv streamlit scipy opencv jsonschema pytest
+```
+
+**Note for macOS users:** PyBullet installation via conda is more reliable on macOS due to native dependencies.
 
 Required packages:
 - `pybullet>=3.2.5` - Physics simulation engine
@@ -113,6 +130,19 @@ ANTHROPIC_MODEL=claude-3-5-haiku-20241022
 - **Operating System**: Linux, macOS, or Windows
 - **Display**: GUI support for PyBullet visualization
 - **Memory**: Minimum 4GB RAM recommended
+
+### Platform-Specific Notes
+
+**macOS:**
+- Interactive mode with GUI visualization requires running two separate processes (see [Interactive Mode](#interactive-mode-conversational-control))
+- This is due to macOS threading restrictions: NSWindow/AppKit must run on the main thread
+- Batch mode works normally with direct GUI access
+- Alternative: Use headless mode with panorama captures for visual feedback
+
+**Linux/Windows:**
+- All modes work without additional setup
+- Interactive mode can create GUI windows directly from Streamlit
+- No multi-process architecture required (but supported)
 
 ### API Requirements
 
@@ -174,18 +204,54 @@ python main.py --scene example_stacking
 
 Interactive mode provides a web-based chat interface for natural language robot control.
 
-**Launch interactive mode:**
+#### macOS Users: Visual Server Setup (Required for GUI Visualization)
+
+**Why this is needed:** macOS requires all GUI window creation (NSWindow/AppKit) to happen on the main thread. Since Streamlit runs Python code in a background thread, PyBullet cannot create GUI windows directly. The solution is to run a separate PyBullet GUI server process.
+
+**Terminal 1 - Start PyBullet GUI server:**
+
+```bash
+python main_visual.py
+python main_visual.py --scene example_stacking  # With custom scene
+```
+
+This will:
+- Open the PyBullet GUI window (visualization)
+- Run as a server waiting for connections
+- Display scene with robot and objects
+
+**Terminal 2 - Start Streamlit interface:**
 
 ```bash
 streamlit run main_interactive.py
+streamlit run main_interactive.py -- --scene example_stacking  # Must match Terminal 1 scene
 ```
 
-**With custom scene:**
+**Important:** Both terminals must use the **same `--scene` argument** to load matching configurations.
+
+The Streamlit interface will automatically detect and connect to the GUI server via shared memory, allowing you to control the robot through the web chat while seeing real-time movements in the PyBullet window.
+
+#### Linux/Windows Users: Direct Launch
+
+On Linux and Windows, you can run interactive mode directly without the visual server:
 
 ```bash
+streamlit run main_interactive.py
 streamlit run main_interactive.py -- --scene default
-streamlit run main_interactive.py -- --scene scene_1
 ```
+
+The PyBullet GUI will open automatically alongside the web interface.
+
+#### Headless Mode (All Platforms)
+
+If no visual server is running (or if you prefer headless operation), Streamlit will automatically fall back to headless mode with a helpful message:
+
+```
+No PyBullet GUI server found, using headless mode
+Tip: Run 'python main_visual.py' in another terminal for visualization
+```
+
+You can still control the robot and request panorama captures through the chat interface to see the scene.
 
 **Note:** The double dash `--` separates Streamlit arguments from script arguments.
 
@@ -193,7 +259,7 @@ streamlit run main_interactive.py -- --scene scene_1
 
 1. After running the command, Streamlit will output a URL (typically `http://localhost:8501`)
 2. Open the URL in your web browser
-3. Wait for initialization (PyBullet window will open separately)
+3. Wait for initialization (connection status shown in console)
 4. Start chatting with the robot
 
 **Example commands:**
@@ -1094,7 +1160,7 @@ Streamlit sidebar shows real-time token usage:
 ### Component Hierarchy
 
 ```
-main.py / main_interactive.py (Entry Point)
+main.py / main_interactive.py / main_visual.py (Entry Points)
 ├── SimulationState (Physics time tracking)
 ├── ObjectManager (Object registry and queries)
 ├── CameraManager (Panorama capture)
@@ -1115,6 +1181,11 @@ main.py / main_interactive.py (Entry Point)
 └── SimulationLogger (Comprehensive logging)
 ```
 
+**Execution Mode Notes:**
+- **main.py**: Batch mode - Single process, direct GUI access
+- **main_interactive.py**: Interactive mode client - Connects to visual server or runs headless
+- **main_visual.py**: GUI server for macOS - Enables visualization for interactive mode
+
 ### Data Flow
 
 **Batch Mode:**
@@ -1128,12 +1199,23 @@ Validated Plan → LLMController → RobotController → Physical Execution
 
 **Interactive Mode:**
 ```
+[main_visual.py] PyBullet GUI Server (macOS only)
+        ↑ p.SHARED_MEMORY connection
+        ↓
+[main_interactive.py] Streamlit Interface
+        ↓
 User Message → InteractiveLLMController → Claude API (with tools)
                                               ↓
 Tool Calls → Tool Execution → RobotController/ObjectManager/CameraManager
                                               ↓
 Tool Results → Claude API → User Response → Streamlit UI
 ```
+
+**macOS Dual-Process Architecture:**
+- Process 1 (`main_visual.py`): Owns main thread, creates GUI window, runs as `p.GUI_SERVER`
+- Process 2 (`main_interactive.py`): Runs Streamlit, connects via `p.SHARED_MEMORY`
+- Communication: Shared memory (no network overhead)
+- Both processes share the same PyBullet simulation state
 
 ### Key Design Patterns
 
@@ -1321,6 +1403,32 @@ See [Scene Configuration](#scene-configuration) section above.
 - Avoid requesting panoramas unnecessarily
 - Use `streamlit clear_cache` to reset
 - Check token usage in sidebar (context window limits)
+
+**8. "macOS: NSInternalInconsistencyException - NSWindow should only be instantiated on the main thread"**
+
+**Cause:**
+- Attempting to run interactive mode directly on macOS without visual server
+- macOS enforces GUI window creation on main thread only
+- Streamlit runs code in background thread
+
+**Solution:**
+- Use the two-terminal setup for interactive mode on macOS:
+  - Terminal 1: `python main_visual.py`
+  - Terminal 2: `streamlit run main_interactive.py`
+- Or use headless mode (no GUI, panorama captures only)
+- Batch mode is unaffected and works normally
+
+**9. "Interactive mode connects but robot doesn't move in GUI"**
+
+**Causes:**
+- Visual server and Streamlit client loaded different scenes
+- Scene names don't match between processes
+
+**Solutions:**
+- Ensure both processes use the same `--scene` argument
+- Restart both Terminal 1 (visual server) and Terminal 2 (Streamlit)
+- Check console output for scene loading confirmation
+- Verify object names match in both logs
 
 ### Debug Mode
 

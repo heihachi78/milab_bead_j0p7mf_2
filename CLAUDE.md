@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is an LLM-controlled PyBullet robotics simulation for a Franka Panda robotic arm. The system uses Anthropic's Claude API to generate, validate, and execute pick-and-place task plans based on natural language descriptions and visual scene understanding through multi-camera panoramas.
 
-**The project supports two modes:**
+**The project supports three execution modes:**
 1. **Batch Mode** ([main.py](main.py)): Automated task execution with plan validation
 2. **Interactive Mode** ([main_interactive.py](main_interactive.py)): Real-time chat interface for conversational robot control
+3. **Visual Server Mode** ([main_visual.py](main_visual.py)): PyBullet GUI server for macOS compatibility (enables GUI visualization for interactive mode)
 
 ## Core Architecture
 
@@ -16,7 +17,9 @@ This is an LLM-controlled PyBullet robotics simulation for a Franka Panda roboti
 
 The codebase follows a clean separation of concerns with distinct manager classes:
 
-- **[main.py](main.py)**: Orchestration script that initializes all components and runs the LLM-driven execution pipeline
+- **[main.py](main.py)**: Batch mode orchestration script that initializes all components and runs the LLM-driven execution pipeline
+- **[main_interactive.py](main_interactive.py)**: Streamlit-based interactive chat interface (connects to visual server or runs headless)
+- **[main_visual.py](main_visual.py)**: PyBullet GUI server for macOS (runs on main thread, required due to NSWindow/AppKit threading restrictions)
 - **[src/config.py](src/config.py)**: Centralized configuration with all parameters (physics, robot, camera, LLM settings)
 - **[src/scene_loader.py](src/scene_loader.py)**: YAML-based scene configuration loader (objects and tasks)
 - **[src/robot_controller.py](src/robot_controller.py)**: Robot control logic (IK, motion planning, gripper operations, pick/place primitives)
@@ -108,39 +111,59 @@ Launches PyBullet GUI and executes the LLM-driven task pipeline:
 
 ### Running Interactive Mode
 
+**macOS - With GUI Visualization (Two-Terminal Setup):**
+
+Terminal 1 - Start PyBullet GUI server:
+```bash
+python main_visual.py
+python main_visual.py --scene example_stacking
+```
+
+Terminal 2 - Start Streamlit interface:
 ```bash
 streamlit run main_interactive.py
-streamlit run main_interactive.py -- --scene default
 streamlit run main_interactive.py -- --scene example_stacking
 ```
 
-Launches a Streamlit web interface with:
-1. PyBullet GUI for visual feedback
-2. Web chat interface at http://localhost:8501
-3. Real-time conversational robot control
-4. Natural language command execution via Claude LLM
-5. Sidebar with live scene information (object positions, gripper state)
+**Important:** Both terminals must use the **same `--scene` argument**. The visual server runs PyBullet GUI on the main thread (macOS requirement), while Streamlit connects via `p.SHARED_MEMORY`.
+
+**Linux/Windows - Direct Launch:**
+```bash
+streamlit run main_interactive.py
+streamlit run main_interactive.py -- --scene default
+```
+
+**Headless Mode (All Platforms):**
+
+If no visual server is running, the system automatically falls back to headless mode (`p.DIRECT`). You can still request panorama captures through the chat interface.
 
 **Interactive Mode Features:**
-- Chat with Claude to control the robot in natural language
+- Web chat interface at http://localhost:8501
+- Real-time conversational robot control
+- Natural language command execution via Claude LLM
 - LLM uses 11 tools to query scene state and execute operations
 - On-demand panorama capture (only when LLM requests visual info)
 - Tool execution results displayed inline in chat
 - Conversation history maintained throughout session
+- PyBullet GUI visualization (when using visual server mode)
 
 ### Installing Dependencies
 
+**Using pip:**
 ```bash
 pip install -r requirements.txt
 ```
 
+**Using conda (recommended for macOS):**
+```bash
+conda create -n pybullet_env python=3.11
+conda activate pybullet_env
+conda install -c conda-forge pybullet anthropic numpy pillow pyyaml python-dotenv streamlit scipy opencv jsonschema pytest
+```
+
 Required dependencies include: `pybullet`, `anthropic`, `numpy`, `pillow`, `python-dotenv`, `streamlit`
 
-### Virtual Environment
-
-```bash
-source .venv/bin/activate
-```
+**Note:** PyBullet installation via conda is more reliable on macOS due to native dependencies.
 
 ### Environment Configuration
 
@@ -216,9 +239,20 @@ task:
 
 **Run with your custom scene:**
 ```bash
+# Batch mode
 python main.py --scene my_scene
+
+# Interactive mode (headless)
+streamlit run main_interactive.py -- --scene my_scene
+
+# Interactive mode with visual feedback (macOS)
+# Terminal 1:
+python main_visual.py --scene my_scene
+# Terminal 2:
 streamlit run main_interactive.py -- --scene my_scene
 ```
+
+**Important:** When using visual server mode, ensure both `main_visual.py` and `main_interactive.py` are started with the same `--scene` argument so they load matching configurations.
 
 See [scenes/README.md](scenes/README.md) for detailed format documentation.
 
@@ -241,12 +275,26 @@ Edit files in [prompts/](prompts/):
 
 Prompts use template variables like `{OBJECTS_LIST}`, `{OBJECTS_INFO}`, `{TASK_DESCRIPTION}`.
 
-### Using Interactive Mode
+### Using Interactive Mode with Visual Feedback
 
-Launch the Streamlit interface:
+**For macOS users (required for GUI visualization):**
+
+Terminal 1 - Start visual server:
+```bash
+python main_visual.py
+```
+
+Terminal 2 - Launch Streamlit interface:
 ```bash
 streamlit run main_interactive.py
 ```
+
+**Why this is needed on macOS:**
+macOS requires all GUI window creation (NSWindow/AppKit) to happen on the main thread. Streamlit runs Python scripts in a background thread, which triggers an `NSInternalInconsistencyException` when PyBullet tries to create a GUI window. The solution is to run PyBullet's GUI in a separate process ([main_visual.py](main_visual.py)) that owns the main thread, while Streamlit ([main_interactive.py](main_interactive.py)) connects to it via shared memory (`p.SHARED_MEMORY`).
+
+Linux and Windows don't have this threading restriction, but the dual-process approach works on all platforms.
+
+**Using the interface:**
 
 The web interface opens at `http://localhost:8501` with a chat interface. Example commands:
 - "What objects are in the scene?"
@@ -255,7 +303,7 @@ The web interface opens at `http://localhost:8501` with a chat interface. Exampl
 - "Move the gripper to [0.3, 0.4, 0.2]"
 - "Stack the red cube on the blue cube"
 
-The LLM has access to 12 tools:
+The LLM has access to 11 tools:
 1. **Query Tools**: `get_gripper_position`, `get_gripper_state`, `get_object_position`, `get_all_objects`, `get_panorama`
 2. **Movement Tools**: `move_gripper`, `move_gripper_smooth`
 3. **Gripper Tools**: `open_gripper`, `close_gripper`
@@ -308,6 +356,9 @@ Captured panoramas are saved to `images/` with sequential numbering. Review thes
 
 **Prompt-driven behavior**: The system's task execution is entirely driven by LLM interpretation of prompts. Changing prompts changes behavior without code modifications.
 
-**Dual execution modes**:
-- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans. Task loaded from scene YAML file.
-- **Interactive mode** ([main_interactive.py](main_interactive.py)): Conversational control using Claude's native tool calling API with 11 available tools. System prompt defined in [prompts/interactive_system_prompt.txt](prompts/interactive_system_prompt.txt).
+**Multi-mode execution architecture**:
+- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans. Task loaded from scene YAML file. Runs PyBullet GUI on main thread.
+- **Interactive mode** ([main_interactive.py](main_interactive.py)): Conversational control using Claude's native tool calling API with 11 available tools. System prompt defined in [prompts/interactive_system_prompt.txt](prompts/interactive_system_prompt.txt). Connects to visual server or runs headless.
+- **Visual server mode** ([main_visual.py](main_visual.py)): Dedicated PyBullet GUI server process for macOS compatibility. Runs as `p.GUI_SERVER` and allows other processes to connect via `p.SHARED_MEMORY`.
+
+**macOS threading model**: macOS enforces that all AppKit/NSWindow operations occur on the main thread. Since Streamlit runs user code in background threads, PyBullet GUI cannot be created directly in [main_interactive.py](main_interactive.py). The solution is a dual-process architecture where [main_visual.py](main_visual.py) owns the main thread and GUI window, while [main_interactive.py](main_interactive.py) connects as a client. This architecture works on all platforms but is essential for macOS.

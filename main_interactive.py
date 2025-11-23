@@ -90,34 +90,50 @@ def initialize_simulation():
         st.stop()
 
     # Connect to PyBullet
-    # Use DIRECT mode (headless) to avoid macOS threading issues with GUI
+    # Try to connect to existing GUI server (started by main_visual.py)
     clid = p.connect(p.SHARED_MEMORY)
     if clid < 0:
+        # If no server is running, use DIRECT mode (headless) to avoid macOS threading issues
+        logger.console_info("No PyBullet GUI server found, using headless mode")
+        logger.console_info("Tip: Run 'python main_visual.py' in another terminal for visualization")
         p.connect(p.DIRECT)
-
-    p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
-    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-    p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
-    p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
-    p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
+    else:
+        logger.console_info("Connected to PyBullet GUI server")
 
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     logger.app_logger.info("PyBullet connected successfully")
 
-    # Load plane and robot
-    p.loadURDF("plane.urdf", PLANE_POSITION)
-    logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
+    # Get references to already-loaded plane and robot from the server
+    # The GUI server (main_visual.py) should have already loaded these
+    # We just need to find them
+    armId = None
+    for i in range(p.getNumBodies()):
+        body_info = p.getBodyInfo(i)
+        body_name = body_info[0].decode('utf-8')
+        if 'panda' in body_name.lower() or i == 1:  # Robot is typically body ID 1
+            armId = i
+            break
 
-    armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
-    p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
+    if armId is None:
+        # If no robot found, we're probably in DIRECT mode, need to create everything
+        logger.console_info("No existing simulation found, creating new one...")
+        p.loadURDF("plane.urdf", PLANE_POSITION)
+        logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
+
+        armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
+        p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
+        logger.app_logger.info(f"Loaded Franka Panda robot")
+
+        p.setGravity(0, 0, GRAVITY)
+        logger.app_logger.info(f"Gravity set to {GRAVITY}")
+
+        p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
+        logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
+
     endEffectorIndex = END_EFFECTOR_INDEX
     numJoints = p.getNumJoints(armId)
-    logger.app_logger.info(f"Loaded Franka Panda robot with {numJoints} joints")
-    logger.console_info(f"Robot loaded: {numJoints} joints")
-
-    # Set gravity
-    p.setGravity(0, 0, GRAVITY)
-    logger.app_logger.info(f"Gravity set to {GRAVITY}")
+    logger.app_logger.info(f"Using Franka Panda robot with {numJoints} joints (ID: {armId})")
+    logger.console_info(f"Robot ready: {numJoints} joints")
 
     # Initialize simulation components
     simulation_state = SimulationState()
@@ -134,31 +150,50 @@ def initialize_simulation():
             os.remove(file)
         logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
 
-    # Set simulation parameters
-    p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
-    logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
+    # Check if objects are already loaded (from GUI server)
+    existing_objects = []
+    for i in range(p.getNumBodies()):
+        body_info = p.getBodyInfo(i)
+        body_name = body_info[0].decode('utf-8')
+        if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
+            existing_objects.append((i, body_name))
 
-    # Load objects from scene configuration
-    logger.console_info("Loading objects into scene...")
-    for obj in scene.objects:
-        if obj.type == 'cube':
-            object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
-            logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
-        else:
-            logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
-    logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
+    if len(existing_objects) >= len(scene.objects):
+        # Objects already loaded by GUI server, just register them
+        logger.console_info(f"Using {len(existing_objects)} objects from GUI server...")
+        # Register existing objects with object_manager
+        for obj_id, obj_name in existing_objects:
+            # Try to match with scene objects by name or position
+            for scene_obj in scene.objects:
+                if scene_obj.name in obj_name or obj_name in scene_obj.name:
+                    object_manager.objects[scene_obj.name] = obj_id
+                    logger.app_logger.info(f"Registered existing object: {scene_obj.name} (ID: {obj_id})")
 
-    # Stabilization loop
-    logger.console_info("Running stabilization loop...")
-    # First stabilize robot at rest pose with motors active
-    robot_controller.stabilize()
-    # Reset gripper orientation (move_to_target_smooth runs simulation internally)
-    robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
-    robot_controller.reset_orientation()
-    # Allow system to settle with correct orientation
-    for i in range(STABILIZATION_LOOP_STEPS):
-        p.stepSimulation()
-    logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")
+        # If names don't match, register by order
+        if len(object_manager.objects) == 0:
+            for idx, (obj_id, _) in enumerate(existing_objects):
+                if idx < len(scene.objects):
+                    object_manager.objects[scene.objects[idx].name] = obj_id
+                    logger.app_logger.info(f"Registered object by order: {scene.objects[idx].name} (ID: {obj_id})")
+    else:
+        # Load objects from scene configuration
+        logger.console_info("Loading objects into scene...")
+        for obj in scene.objects:
+            if obj.type == 'cube':
+                object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
+                logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
+            else:
+                logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
+        logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
+
+        # Stabilization loop (only if we loaded objects ourselves)
+        logger.console_info("Running stabilization loop...")
+        robot_controller.stabilize()
+        robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
+        robot_controller.reset_orientation()
+        for i in range(STABILIZATION_LOOP_STEPS):
+            p.stepSimulation()
+        logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")
 
     # Initialize Interactive LLM Controller
     logger.console_info("Initializing interactive LLM controller...")
