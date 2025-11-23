@@ -48,12 +48,16 @@ Analyze the task by inspecting the uploaded image and the provided object list a
 then generate a sequence of commands to accomplish it. Carefuly analyze each objects relative position to each other.
 Make sure that an object is reachable before picking it up or placing another object on top of it.
 Especially be careful with the stacked objects. Avoid any unnecessary placement operations.
+When the object you want to pick up is close to another or you want to place an object close to another then always be careful with the gripper orientation.
+The gripper can grab an object from above. Its not capable of grabbing an object from the sides. That means, there MUST NOT BE any other object on top of the object that the gripper picks up.
 
 **IMPORTANT: Always double check that when you place an object on the ground or on another object there is a clear way for the gripper and will NOT collide with anything.**
 
 **IMPORTANT: Avoid gripper collision at all costs.**
 
 **IMPORTANT: Check that the placement position is not occupied by another object.**
+
+**IMPORTANT: Check that the gripper is in the right orientation before each action and plan the orientations in advance too.**
 
 ## Gripper Orientation Awareness
 

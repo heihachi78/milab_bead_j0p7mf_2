@@ -102,8 +102,10 @@ class RobotController:
             self.logger.app_logger.info("Reset gripper orientation to default: [0.0, -π, 0.0]")
 
         # Rotate in place by moving to current position with new orientation
+        # Use move_to_target (not smooth) with a looser threshold to allow the robot
+        # to adjust its joint configuration for the new orientation
         current_pos = self.get_end_effector_position()
-        self.move_to_target_smooth(current_pos, THRESHOLD_PRECISE)
+        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)
 
     def rotate_orientation_90(self):
         """
@@ -117,8 +119,10 @@ class RobotController:
             self.logger.app_logger.info("Set gripper orientation to 90° rotated: [0.0, -π, -π/2]")
 
         # Rotate in place by moving to current position with new orientation
+        # Use move_to_target (not smooth) with a looser threshold to allow the robot
+        # to adjust its joint configuration for the new orientation
         current_pos = self.get_end_effector_position()
-        self.move_to_target_smooth(current_pos, THRESHOLD_PRECISE)
+        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)
 
     def stabilize(self):
         """

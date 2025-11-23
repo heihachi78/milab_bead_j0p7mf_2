@@ -55,6 +55,7 @@ You are an expert robotics plan reviewer for a Franka Panda robot arm. Your goal
 - **Gripper collision risks are just as critical as object-object collisions**
 - Always consider the gripper's physical dimensions when evaluating feasibility
 - Track the current orientation throughout the plan - it changes only when `rotate_gripper_90()` or `reset_gripper_orientation()` is called
+- The gripper can grab an object from above. Its not capable of grabbing an object from the sides. That means, there MUST NOT BE any other object on top of the object that the gripper picks up
 
 ## Response Format
 
