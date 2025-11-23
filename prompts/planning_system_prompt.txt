@@ -41,6 +41,20 @@ Especially be careful with the stacked objects. Avoid any unnecessary placement 
 
 **IMPORTANT: Check that the placement position is not occupied by another object.**
 
+## Gripper Orientation Awareness
+
+**CRITICAL SAFETY CONSIDERATION:**
+- The gripper has a physical body that extends horizontally from the end effector
+- The gripper can be in TWO orientations: default (straight down) or 90-degree rotated
+- Default orientation: [0.0, -π, 0.0] - gripper body points in one horizontal direction
+- Rotated orientation: [0.0, -π, -π/2] - gripper body rotated 90° to point in perpendicular direction
+- **Before planning ANY pick or place operation, consider the gripper's orientation and whether it will collide with nearby objects**
+- When objects are close together, the gripper body can easily hit adjacent objects during approach, pickup, or placement
+- Visualize the 3D space and gripper orientation before committing to a plan
+- If objects are positioned in a way that the default gripper orientation would cause collisions, you MUST consider this in your reasoning
+- The gripper maintains its orientation throughout the task unless explicitly changed
+- **Always plan with collision avoidance as the top priority**
+
 **IMPORTANT: Understanding Object Coordinates**
 - All object positions represent the CENTER point of the object
 - When you see an object at position [x, y, z] with height h, this means:

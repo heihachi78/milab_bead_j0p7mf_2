@@ -196,7 +196,6 @@ logger.console_info(f"Plan contains {len(commands)} command(s)")
 llm_controller.execute_plan(validated_plan)
 
 '''
-robot_controller.reset_orientation()
 robot_controller.pick_up('purple_cube')
 robot_controller.rotate_orientation_90()
 robot_controller.place_on('yellow_cube')

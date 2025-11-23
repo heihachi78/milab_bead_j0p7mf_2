@@ -43,6 +43,22 @@ You have received a task plan that has been reviewed and found to have issues. Y
 
 **IMPORTANT: Check that the placement position is not occupied by another object.**
 
+## Gripper Orientation Collision Awareness
+
+**CRITICAL REFINEMENT CONSIDERATION:**
+- The gripper has a physical body that extends horizontally from the end effector
+- The gripper can be in TWO orientations: default [0.0, -π, 0.0] or 90-degree rotated [0.0, -π, -π/2]
+- **When refining a plan, you MUST consider whether the gripper's orientation will cause collisions with nearby objects**
+- If the critique mentions gripper collision risks or spatial constraints, carefully analyze the 3D positions of objects
+- Visualize how the gripper body extends during pick and place operations
+- Common solutions:
+  - Ensure adequate spacing between objects during placement
+  - Consider the gripper's approach angle and body orientation
+  - Account for the gripper's horizontal extension when objects are close together
+- **Gripper-object collisions are just as critical as object-object collisions**
+- The gripper maintains its orientation throughout all operations
+- Always verify that the refined plan provides clear paths for the gripper without hitting any objects
+
 ## Response Format
 
 **CRITICAL: Your response must contain ONLY the JSON object and nothing else. Do not include any explanatory text, commentary, or additional content before or after the JSON. The entire response must be valid JSON that can be parsed directly.**

@@ -199,6 +199,24 @@ Available objects in the scene can be queried using get_all_objects tool."""
                 }
             },
             {
+                "name": "rotate_gripper_90",
+                "description": "Rotate the gripper 90 degrees around the yaw axis. This changes the gripper orientation to approach objects from a perpendicular direction while maintaining the current position.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            {
+                "name": "reset_gripper_orientation",
+                "description": "Reset the gripper orientation to the default down-pointing position. This restores the standard orientation while maintaining the current position.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            },
+            {
                 "name": "pick_up_object",
                 "description": "High-level operation to pick up a specified object. This handles the complete pick sequence: approach, open gripper, grasp, and lift.",
                 "input_schema": {
@@ -392,6 +410,20 @@ Available objects in the scene can be queried using get_all_objects tool."""
             return {
                 "success": True,
                 "message": "Gripper closed"
+            }
+
+        elif tool_name == "rotate_gripper_90":
+            self.robot_controller.rotate_orientation_90()
+            return {
+                "success": True,
+                "message": "Gripper rotated 90 degrees (orientation: [0.0, -π, -π/2])"
+            }
+
+        elif tool_name == "reset_gripper_orientation":
+            self.robot_controller.reset_orientation()
+            return {
+                "success": True,
+                "message": "Gripper orientation reset to default (orientation: [0.0, -π, 0.0])"
             }
 
         elif tool_name == "pick_up_object":
