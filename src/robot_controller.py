@@ -13,95 +13,51 @@ class RobotController:
     """
 
     @staticmethod
-    def initialize_pybullet(logger=None, mode='auto'):
+    def initialize_pybullet(logger=None):
         """
-        Initialize PyBullet connection and load basic simulation environment.
+        Initialize PyBullet GUI connection and load basic simulation environment.
 
         Args:
             logger: SimulationLogger instance for logging (optional)
-            mode: Connection mode - 'auto' (try shared then GUI), 'shared_only' (try shared then direct),
-                  'gui', or 'direct' (default: 'auto')
-            configure_gui: If True, disable shadows, GUI, and preview windows (default: False)
 
         Returns:
-            tuple: (armId, connection_mode) where connection_mode is 'shared', 'direct', or 'gui'
+            int: armId - PyBullet body ID of the loaded robot
         """
-        # Connect to PyBullet
-        connection_mode = 'direct'
+        # Connect to PyBullet GUI
+        p.connect(p.GUI)
+        if logger:
+            logger.console_info("Started PyBullet GUI")
 
-        if mode == 'shared_only':
-            clid = p.connect(p.SHARED_MEMORY)
-            if clid < 0:
-                if logger:
-                    logger.console_info("No PyBullet GUI server found, using headless mode")
-                p.connect(p.DIRECT)
-                connection_mode = 'direct'
-            else:
-                if logger:
-                    logger.console_info("Connected to PyBullet GUI server")
-                connection_mode = 'shared'
-        elif mode == 'gui':
-            # Direct GUI connection
-            p.connect(p.GUI)
-            connection_mode = 'gui'
-            if logger:
-                logger.console_info("Started PyBullet GUI")
-        elif mode == 'direct':
-            # Direct headless connection
-            p.connect(p.DIRECT)
-            connection_mode = 'direct'
-            if logger:
-                logger.console_info("Using headless mode")
-        else:
-            raise ValueError(f"Invalid mode: {mode}. Must be 'shared_only', 'gui', or 'direct'")
-
-        # Configure debug visualizer if requested (only for GUI/shared modes, not DIRECT)
-        # Note: configureDebugVisualizer can hang on macOS in DIRECT mode
-        if connection_mode != 'direct':
-            p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
-            p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-            p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
-            p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
-            p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
+        # Configure debug visualizer
+        p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
+        p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
 
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         if logger:
             logger.app_logger.info("PyBullet connected successfully")
 
-        # Try to find existing robot in the simulation (if connecting to shared memory)
-        armId = None
-        if connection_mode == 'shared':
-            for i in range(p.getNumBodies()):
-                body_info = p.getBodyInfo(i)
-                body_name = body_info[0].decode('utf-8')
-                if 'panda' in body_name.lower() or i == 1:  # Robot is typically body ID 1
-                    armId = i
-                    break
+        # Load plane
+        p.loadURDF("plane.urdf", PLANE_POSITION)
+        if logger:
+            logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
 
-        # If no robot found, create new simulation environment
-        if armId is None:
-            if logger and connection_mode == 'shared':
-                logger.console_info("No existing simulation found, creating new one...")
+        # Load robot
+        armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
+        p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
+        if logger:
+            logger.app_logger.info(f"Loaded Franka Panda robot")
 
-            # Load plane
-            p.loadURDF("plane.urdf", PLANE_POSITION)
-            if logger:
-                logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
+        # Set physics parameters
+        p.setGravity(0, 0, GRAVITY)
+        if logger:
+            logger.app_logger.info(f"Gravity set to {GRAVITY}")
 
-            # Load robot
-            armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
-            p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
-            if logger:
-                logger.app_logger.info(f"Loaded Franka Panda robot")
-
-            # Set physics parameters
-            p.setGravity(0, 0, GRAVITY)
-            if logger:
-                logger.app_logger.info(f"Gravity set to {GRAVITY}")
-
-            p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
-            if logger:
-                logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
+        p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
+        if logger:
+            logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
 
         # Log robot info
         numJoints = p.getNumJoints(armId)
@@ -109,7 +65,7 @@ class RobotController:
             logger.app_logger.info(f"Using Franka Panda robot with {numJoints} joints (ID: {armId})")
             logger.console_info(f"Robot ready: {numJoints} joints")
 
-        return armId, connection_mode
+        return armId
 
     def __init__(self, armId, endEffectorIndex, simulation_state, object_manager, camera_manager=None, logger=None):
         """

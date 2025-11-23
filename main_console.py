@@ -163,15 +163,12 @@ def initialize_simulation(scene_name, logger):
     """Initialize PyBullet simulation and all components."""
     logger.console_info(f"Initializing console simulation with scene: {scene_name}...")
 
-    # Connect to PyBullet with direct GUI (no shared memory)
+    # Connect to PyBullet GUI
     logger.console_info("Starting PyBullet GUI...")
-    armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='gui')
+    armId = RobotController.initialize_pybullet(logger=logger)
     endEffectorIndex = END_EFFECTOR_INDEX
 
-    if connection_mode not in ['gui', 'direct']:
-        raise RuntimeError(f"Failed to initialize PyBullet GUI mode. Got: {connection_mode}")
-
-    logger.console_info(f"PyBullet initialized in {connection_mode} mode")
+    logger.console_info("PyBullet initialized in GUI mode")
 
     # Initialize simulation components
     logger.console_info("Initializing simulation components...")
@@ -207,7 +204,7 @@ def initialize_simulation(scene_name, logger):
 
     # Stabilize robot
     logger.console_info("Stabilizing robot...")
-    robot_controller.stabilize_robot()
+    robot_controller.stabilize()
     logger.console_info("Robot stabilized")
 
     # Initialize Interactive LLM Controller

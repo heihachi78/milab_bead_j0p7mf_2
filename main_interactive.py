@@ -53,23 +53,19 @@ st.markdown("""
 def initialize_simulation():
     """Initialize PyBullet simulation and all components (cached).
 
-    Connects to PyBullet via shared memory. Requires main_visual.py to be running first.
-    All scene setup (objects, robot) is handled by the visual server.
+    Connects to PyBullet in GUI mode and loads the simulation environment.
     """
 
     # Initialize logger
     logger = SimulationLogger(log_dir=LOGS_FOLDER, session_name=LOG_SESSION_NAME)
     logger.console_info("Initializing interactive simulation...")
 
-    # Connect to PyBullet shared memory (requires main_visual.py to be running)
-    logger.console_info("Connecting to PyBullet shared memory...")
-    armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='shared_only')
+    # Connect to PyBullet GUI
+    logger.console_info("Starting PyBullet GUI...")
+    armId = RobotController.initialize_pybullet(logger=logger)
     endEffectorIndex = END_EFFECTOR_INDEX
 
-    if connection_mode != 'shared':
-        raise RuntimeError("Failed to connect to PyBullet shared memory. Please start main_visual.py first.")
-
-    logger.console_info("Connected to PyBullet shared memory")
+    logger.console_info("PyBullet initialized in GUI mode")
 
     # Initialize simulation components
     logger.console_info("Initializing simulation components...")
