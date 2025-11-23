@@ -8,21 +8,21 @@ metadata:
 objects:
   - name: "red_cube"
     type: "cube"
-    position: [0.3, 0.4, 0.05]
+    position: [0.3, 0.0, 0.05]
     color: [1, 0, 0, 1]  # RGBA
     scale: 1.0
 
   - name: "green_cube"
     type: "cube"
-    position: [0.3, 0.2, 0.05]
+    position: [0.3, 0.0, 0.15]
     color: [0, 1, 0, 1]  # RGBA
     scale: 1.0
 
   - name: "blue_cube"
     type: "cube"
-    position: [0.3, 0.0, 0.05]
+    position: [0.3, 0.0, 0.25]
     color: [0, 0, 1, 1]  # RGBA
     scale: 1.0
 
 task:
-  description: "Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, blue cube"
+  description: "Stack all cubes on top of each other in this order from bottom to top: blue cube, green cube, red cube"

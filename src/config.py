@@ -56,7 +56,7 @@ DEFAULT_SCENE = "default"  # Default scene to load if not specified via CLI
 # Movement parameters
 MAX_ITERATIONS = 10000
 DISTANCE_CHANGE_THRESHOLD = 0.0001
-LINEAR_MOVEMENT_SPEED = 0.01  # meters per second for smooth straight-line movement (matches ex.py: t/10 with TIME_STEP=0.01)
+LINEAR_MOVEMENT_SPEED = 0.1  # meters per second for smooth straight-line movement (matches ex.py: t/10 with TIME_STEP=0.01)
 
 # IK solver parameters
 IK_MAX_ITERATIONS = 1000

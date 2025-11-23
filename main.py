@@ -124,16 +124,82 @@ logger.app_logger.info(f"Using panorama: {panorama_path}")
 
 # Generate and validate plan using LangChain workflow
 logger.console_info("Generating and validating execution plan...")
-#validated_plan = llm_validator.get_validated_plan(task_description, panorama_path)
+validated_plan, is_valid, final_critique = llm_validator.get_validated_plan(task_description, panorama_path)
+
+# Check if validation succeeded
+if not is_valid:
+    logger.console_error("=" * 80)
+    logger.console_error("VALIDATION FAILED - NO VALID PLAN FOUND")
+    logger.console_error("=" * 80)
+    logger.console_error("")
+    logger.console_error("The LLM could not generate a valid plan after multiple attempts.")
+    logger.console_error("")
+
+    if final_critique:
+        logger.console_error("Final critique from reviewer:")
+        logger.console_error(f"  {final_critique.get('critique', 'No critique available')}")
+        logger.console_error("")
+
+        suggestions = final_critique.get('suggestions', [])
+        if suggestions:
+            logger.console_error("Suggestions for improvement:")
+            for i, suggestion in enumerate(suggestions, 1):
+                logger.console_error(f"  {i}. {suggestion}")
+            logger.console_error("")
+
+    # Check if plan has no commands
+    commands = validated_plan.get('commands', [])
+    if not commands or len(commands) == 0:
+        logger.console_error("The final plan contains NO COMMANDS (empty command list).")
+        logger.console_error("This usually means the validation loop could not find a suitable approach.")
+    else:
+        logger.console_error(f"The final plan has {len(commands)} command(s) but was rejected by the reviewer.")
+
+    logger.console_error("")
+    logger.console_error("Possible reasons:")
+    logger.console_error("  - The task may be impossible given the current scene configuration")
+    logger.console_error("  - Object positions may make the task infeasible")
+    logger.console_error("  - The LLM may be confused about the scene state")
+    logger.console_error("")
+    logger.console_error("ABORTING EXECUTION - No robot operations will be performed.")
+    logger.console_error("=" * 80)
+
+    logger.log_app_simulation_end(simulation_state.t)
+    logger.close()
+    p.disconnect()
+    exit(1)
+
+# Validate that the plan has commands
+commands = validated_plan.get('commands', [])
+if not commands or len(commands) == 0:
+    logger.console_warning("=" * 80)
+    logger.console_warning("WARNING: Plan contains no commands")
+    logger.console_warning("=" * 80)
+    logger.console_warning("")
+    logger.console_warning("The validated plan has an empty command list.")
+    logger.console_warning("This may indicate that:")
+    logger.console_warning("  - The scene is already in the desired state")
+    logger.console_warning("  - No actions are needed to complete the task")
+    logger.console_warning("")
+    logger.console_warning("Skipping execution (nothing to do).")
+    logger.console_warning("=" * 80)
+
+    logger.log_app_simulation_end(simulation_state.t)
+    logger.close()
+    p.disconnect()
+    exit(0)
 
 # Execute the validated plan
 logger.console_info("Executing validated plan...")
-#llm_controller.execute_plan(validated_plan)
+logger.console_info(f"Plan contains {len(commands)} command(s)")
+llm_controller.execute_plan(validated_plan)
 
+'''
 robot_controller.pick_up('green_cube')
-robot_controller.place([-0.45, 0.45, 0])
-robot_controller.pick_up('blue_cube')
-robot_controller.place_on('red_cube')
+robot_controller.place_on('blue_cube')
+robot_controller.pick_up('red_cube')
+robot_controller.place_on('green_cube')
+'''
 
 logger.log_app_simulation_end(simulation_state.t)
 logger.console_info("Simulation completed successfully")

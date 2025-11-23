@@ -401,7 +401,7 @@ class LLMValidator:
 
         return refined_plan
 
-    def get_validated_plan(self, task_description: str, panorama_path: str, max_iterations: Optional[int] = None) -> Dict[str, Any]:
+    def get_validated_plan(self, task_description: str, panorama_path: str, max_iterations: Optional[int] = None) -> tuple[Dict[str, Any], bool, Optional[Dict[str, Any]]]:
         """
         Generate and validate a plan through iterative critique and refinement.
 
@@ -410,7 +410,7 @@ class LLMValidator:
         2. Critique the plan
         3. If not valid, refine based on critique
         4. Repeat critique-refinement cycle until valid or max iterations reached
-        5. Return final validated plan
+        5. Return final plan with validation status
 
         Args:
             task_description: The task to accomplish
@@ -418,7 +418,10 @@ class LLMValidator:
             max_iterations: Maximum critique-refinement cycles (default from config)
 
         Returns:
-            Final validated plan dictionary
+            Tuple of (plan, is_valid, final_critique)
+            - plan: Final plan dictionary (may be invalid if validation failed)
+            - is_valid: Boolean indicating if plan passed validation
+            - final_critique: Last critique dictionary (None if validated successfully)
         """
         if max_iterations is None:
             max_iterations = config.MAX_VALIDATION_ITERATIONS if hasattr(config, 'MAX_VALIDATION_ITERATIONS') else 3
@@ -427,33 +430,37 @@ class LLMValidator:
         current_plan = self._generate_initial_plan(task_description, panorama_path)
 
         # Step 2-N: Critique and refine loop
+        final_critique = None
         for iteration in range(max_iterations):
 
             # Critique the current plan
             critique = self._critique_plan(current_plan, task_description, panorama_path)
+            final_critique = critique
 
             # Check if plan is valid
             if critique.get('is_valid', False):
                 if self.logger:
                     self.logger.log_app_plan_validated(f"Valid after {iteration + 1} iteration(s)")
-                    self.logger.console_info(f">> Plan validated successfully (iteration {iteration + 1})")
+                    self.logger.console_success(f"✓ Plan validated successfully (iteration {iteration + 1})")
 
-                return current_plan
+                return current_plan, True, None
 
             # Plan needs refinement
             if self.logger:
                 self.logger.log_app_warning(f"Plan validation iteration {iteration + 1}: Issues found")
-                self.logger.console_info(f">> Plan needs refinement (iteration {iteration + 1}/{max_iterations})")
+                self.logger.console_warning(f"✗ Plan needs refinement (iteration {iteration + 1}/{max_iterations})")
+                self.logger.console_info(f"  Issue: {critique.get('critique', 'Unknown issue')}")
 
-            # If this is the last iteration, return current plan with warning
+            # If this is the last iteration, return current plan with failure status
             if iteration == max_iterations - 1:
                 if self.logger:
-                    self.logger.log_app_warning(f"Max validation iterations ({max_iterations}) reached. Using best attempt.")
-                    self.logger.console_info(f"Plan validation completed (max iterations reached)")
-                return current_plan
+                    self.logger.log_app_error(f"VALIDATION FAILED: Max iterations ({max_iterations}) reached without valid plan")
+                    self.logger.console_error(f"✗ Validation FAILED after {max_iterations} attempts")
+                    self.logger.console_error(f"  Final issue: {critique.get('critique', 'Unknown issue')}")
+                return current_plan, False, final_critique
 
             # Refine the plan
             current_plan = self._refine_plan(current_plan, critique, task_description, panorama_path)
 
         # This should not be reached, but just in case
-        return current_plan
+        return current_plan, False, final_critique

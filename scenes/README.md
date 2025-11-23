@@ -54,11 +54,6 @@ streamlit run main_interactive.py -- --scene default
 
 If no `--scene` argument is provided, the default scene will be loaded.
 
-## Available Scenes
-
-- `default.yaml`: Original five-cube configuration with stacking task
-- `example_stacking.yaml`: Simple three-cube linear arrangement
-
 ## Creating Custom Scenes
 
 1. Create a new YAML file in this directory (e.g., `my_scene.yaml`)

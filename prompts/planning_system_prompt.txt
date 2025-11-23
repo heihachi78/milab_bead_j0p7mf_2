@@ -21,6 +21,7 @@ You are a robotic task planner for a Franka Panda robot arm. Your goal is to gen
    - Only use this if you want to place an object on the ground
    - Parameter: position (list) - [x, y, z] coordinates in meters where the CENTER of the object will be placed
    - The z-coordinate must be 0 (THIS IS IMPORTANT OTHERWISE YOU WILL DROP THE OBJECT ON THE GROUND)
+   - Avoid placing an object to a place that is already occupied by another object
 
 3. **place_on(object_name)**
    - Places the currently held object at the top of the specified object
@@ -33,6 +34,12 @@ Analyze the task by inspecting the uploaded image and the provided object list a
 then generate a sequence of commands to accomplish it. Carefuly analyze each objects relative position to each other.
 Make sure that an object is reachable before picking it up or placing another object on top of it.
 Especially be careful with the stacked objects. Avoid any unnecessary placement operations.
+
+**IMPORTANT: Always double check that when you place an object on the ground or on another object there is a clear way for the gripper and will NOT collide with anything.**
+
+**IMPORTANT: Avoid gripper collision at all costs.**
+
+**IMPORTANT: Check that the placement position is not occupied by another object.**
 
 **IMPORTANT: Understanding Object Coordinates**
 - All object positions represent the CENTER point of the object

@@ -47,6 +47,37 @@ class RobotController:
         # Gripper state tracking
         self.current_gripper_pos = GRIPPER_CLOSED_POSITION
 
+        # Configure gripper for better grip strength
+        self._configure_gripper()
+
+    def _configure_gripper(self):
+        """
+        Configure gripper dynamics and constraints for improved grip strength.
+        Increases friction and creates a gear constraint to mechanically lock fingers together.
+        """
+        # Increase gripper finger friction for better grip
+        p.changeDynamics(self.armId, FINGER_JOINT1_INDEX, lateralFriction=2.0)
+        p.changeDynamics(self.armId, FINGER_JOINT2_INDEX, lateralFriction=2.0)
+        if self.logger:
+            self.logger.app_logger.info("Configured gripper friction: lateralFriction=2.0")
+
+        # Create gear constraint to mechanically lock gripper fingers together
+        # This prevents inertial forces from breaking the grip during fast movements
+        # Gear ratio of -1 means fingers move symmetrically in opposite directions
+        self.gripper_constraint = p.createConstraint(
+            parentBodyUniqueId=self.armId,
+            parentLinkIndex=FINGER_JOINT1_INDEX,
+            childBodyUniqueId=self.armId,
+            childLinkIndex=FINGER_JOINT2_INDEX,
+            jointType=p.JOINT_GEAR,
+            jointAxis=[1, 0, 0],
+            parentFramePosition=[0, 0, 0],
+            childFramePosition=[0, 0, 0]
+        )
+        p.changeConstraint(self.gripper_constraint, gearRatio=-1, erp=0.1, maxForce=50)
+        if self.logger:
+            self.logger.app_logger.info("Created gear constraint between gripper fingers (gearRatio=-1, maxForce=50)")
+
     def get_end_effector_position(self):
         """
         Get the current position of the end effector.
@@ -243,14 +274,14 @@ class RobotController:
                                             jointIndex=FINGER_JOINT1_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            force=GRIPPER_MOTOR_FORCE * 100,
-                                            maxVelocity=0.01)
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=1.0)
                     p.setJointMotorControl2(bodyIndex=self.armId,
                                             jointIndex=FINGER_JOINT2_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            force=GRIPPER_MOTOR_FORCE * 100,
-                                            maxVelocity=0.01)
+                                            force=GRIPPER_MOTOR_FORCE,
+                                            positionGain=1.0)
 
                 else:
                     for i in range(NUM_ARM_JOINTS):
@@ -383,13 +414,13 @@ class RobotController:
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
                                             force=GRIPPER_MOTOR_FORCE,
-                                            maxVelocity=0.01)
+                                            positionGain=1.0)
                     p.setJointMotorControl2(bodyIndex=self.armId,
                                             jointIndex=FINGER_JOINT2_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
                                             force=GRIPPER_MOTOR_FORCE,
-                                            maxVelocity=0.01)
+                                            positionGain=1.0)
 
                 else:
                     for i in range(NUM_ARM_JOINTS):

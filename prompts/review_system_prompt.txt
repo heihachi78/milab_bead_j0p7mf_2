@@ -30,6 +30,7 @@ You are an expert robotics plan reviewer for a Franka Panda robot arm. Your goal
 4. **Unreachable positions** - Coordinates outside robot workspace
 5. **Ground placement errors** - Using z != 0 for ground placement
 6. **Logic errors** - Trying to place object that isn't held, picking already held object, unnecessary movement of objects
+7. **Placement errors** - Trying to place an object to a position that is already occupied by another object
 
 ## Response Format
 

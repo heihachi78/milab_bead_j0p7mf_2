@@ -1,40 +1,28 @@
-# Default Scene Configuration
-# This scene contains the original configuration from the initial setup
+# Example Stacking Scene
+# This scene demonstrates a different arrangement and task
 
 metadata:
-  name: "Default Scene"
-  description: "Basic five-cube scene for stacking tasks"
+  name: "Example Stacking Scene"
+  description: "Three cubes arranged in a line for simple stacking"
 
 objects:
-  - name: "blue_cube"
-    type: "cube"
-    position: [0.45, 0.50, 0.05]
-    color: [0, 0, 1, 1]  # RGBA
-    scale: 1.0
-
   - name: "red_cube"
     type: "cube"
-    position: [0.25, 0.45, 0.05]
+    position: [0.3, 0.3, 0.05]
     color: [1, 0, 0, 1]  # RGBA
     scale: 1.0
 
   - name: "green_cube"
     type: "cube"
-    position: [0.1, 0.40, 0.05]
+    position: [0.35, 0.35, 0.05]
     color: [0, 1, 0, 1]  # RGBA
     scale: 1.0
 
-  - name: "yellow_cube"
+  - name: "blue_cube"
     type: "cube"
-    position: [-0.15, 0.35, 0.05]
-    color: [1, 1, 0, 1]  # RGBA
-    scale: 1.0
-
-  - name: "purple_cube"
-    type: "cube"
-    position: [-0.15, 0.35, 0.15]  # Stacked on top of yellow cube
-    color: [0.5, 0, 0.5, 1]  # RGBA
+    position: [0.4, 0.4, 0.05]
+    color: [0, 0, 1, 1]  # RGBA
     scale: 1.0
 
 task:
-  description: "Create a stack that is in this order from bottom to up: blue cube, yellow cube, green cube, purple cube, red cube"
+  description: "Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, blue cube"

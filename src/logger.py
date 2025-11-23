@@ -309,6 +309,18 @@ class SimulationLogger:
         """Print progress update to console."""
         self.console_logger.info(f">> {message}")
 
+    def console_success(self, message: str):
+        """Print success message to console."""
+        self.console_logger.info(message)
+
+    def console_warning(self, message: str):
+        """Print warning message to console."""
+        self.console_logger.warning(message)
+
+    def console_error(self, message: str):
+        """Print error message to console."""
+        self.console_logger.error(message)
+
     # ============== Interactive Mode Logging Methods ==============
 
     def log_interactive_message(self, role: str, content: str, input_tokens: int = None, output_tokens: int = None):
