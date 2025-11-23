@@ -19,9 +19,6 @@ class LLMController:
         self.robot_controller = robot_controller
         self.logger = logger
 
-        # Load task description
-        self.task_description = self._load_file('llm_task_init.txt')
-
     def _load_file(self, filename: str) -> str:
         """
         Load text file content from prompts folder.

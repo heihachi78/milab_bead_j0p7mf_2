@@ -243,20 +243,15 @@ class RobotController:
                                             jointIndex=FINGER_JOINT1_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            targetVelocity=0,
-                                            force=GRIPPER_MOTOR_FORCE,
-                                            positionGain=0.3,
-                                            velocityGain=1.0,
+                                            force=GRIPPER_MOTOR_FORCE * 100,
                                             maxVelocity=0.01)
                     p.setJointMotorControl2(bodyIndex=self.armId,
                                             jointIndex=FINGER_JOINT2_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            targetVelocity=0,
-                                            force=GRIPPER_MOTOR_FORCE,
-                                            positionGain=0.3,
-                                            velocityGain=1.0,
+                                            force=GRIPPER_MOTOR_FORCE * 100,
                                             maxVelocity=0.01)
+
                 else:
                     for i in range(NUM_ARM_JOINTS):
                         p.resetJointState(self.armId, i, jointPoses[i])
@@ -387,20 +382,15 @@ class RobotController:
                                             jointIndex=FINGER_JOINT1_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            targetVelocity=0,
                                             force=GRIPPER_MOTOR_FORCE,
-                                            positionGain=0.3,
-                                            velocityGain=1.0,
                                             maxVelocity=0.01)
                     p.setJointMotorControl2(bodyIndex=self.armId,
                                             jointIndex=FINGER_JOINT2_INDEX,
                                             controlMode=p.POSITION_CONTROL,
                                             targetPosition=self.current_gripper_pos,
-                                            targetVelocity=0,
                                             force=GRIPPER_MOTOR_FORCE,
-                                            positionGain=0.3,
-                                            velocityGain=1.0,
                                             maxVelocity=0.01)
+
                 else:
                     for i in range(NUM_ARM_JOINTS):
                         p.resetJointState(self.armId, i, jointPoses[i])

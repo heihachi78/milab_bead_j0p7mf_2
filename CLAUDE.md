@@ -18,6 +18,7 @@ The codebase follows a clean separation of concerns with distinct manager classe
 
 - **[main.py](main.py)**: Orchestration script that initializes all components and runs the LLM-driven execution pipeline
 - **[src/config.py](src/config.py)**: Centralized configuration with all parameters (physics, robot, camera, LLM settings)
+- **[src/scene_loader.py](src/scene_loader.py)**: YAML-based scene configuration loader (objects and tasks)
 - **[src/robot_controller.py](src/robot_controller.py)**: Robot control logic (IK, motion planning, gripper operations, pick/place primitives)
 - **[src/object_manager.py](src/object_manager.py)**: Object loading, tracking, and position/dimension queries
 - **[src/camera_manager.py](src/camera_manager.py)**: Multi-camera panorama capture from 5 viewpoints (front/right/back/left/top)
@@ -64,6 +65,15 @@ See [src/llm_controller.py](src/llm_controller.py:67-113) for execution logic.
 
 Each operation uses different threshold values for different phases (over target, close target, precise) defined in [src/config.py](src/config.py:93-97).
 
+### Scene Configuration System
+
+[src/scene_loader.py](src/scene_loader.py) manages YAML-based scene definitions from the [scenes/](scenes/) directory:
+- **Scene metadata**: Name and description
+- **Object definitions**: Position, color, type, and scale for each object
+- **Task description**: Natural language task for batch mode execution
+
+Scene files use a validated YAML schema with automatic error checking. Both batch and interactive modes support the `--scene` CLI argument to load different configurations.
+
 ### Camera System
 
 [src/camera_manager.py](src/camera_manager.py) captures 5-viewpoint panoramas:
@@ -80,21 +90,28 @@ The LLM receives these panoramas for visual scene understanding during plan gene
 
 ```bash
 python main.py
+python main.py --scene default
+python main.py --scene example_stacking
 ```
 
 Launches PyBullet GUI and executes the LLM-driven task pipeline:
 1. Initialize simulation and stabilize robot
-2. Load colored cubes into scene
-3. Capture initial panorama
-4. Load task from [prompts/llm_task_init.txt](prompts/llm_task_init.txt)
+2. Load scene configuration from YAML file (objects and task)
+3. Load objects into scene
+4. Capture initial panorama
 5. Generate and validate plan using Claude API
 6. Execute validated plan
 7. Save logs and close
+
+**CLI Arguments:**
+- `--scene SCENE_NAME`: Specify which scene to load (default: `default`)
 
 ### Running Interactive Mode
 
 ```bash
 streamlit run main_interactive.py
+streamlit run main_interactive.py -- --scene default
+streamlit run main_interactive.py -- --scene example_stacking
 ```
 
 Launches a Streamlit web interface with:
@@ -169,17 +186,51 @@ Vertical approach strategy defined by offset constants:
 
 ## Common Modifications
 
+### Creating Custom Scenes
+
+Scenes are defined in YAML files in the [scenes/](scenes/) directory. Each scene contains object definitions and a task description.
+
+**Create a new scene file** (e.g., `scenes/my_scene.yaml`):
+
+```yaml
+metadata:
+  name: "My Custom Scene"
+  description: "Description of your scene"
+
+objects:
+  - name: "red_cube"
+    type: "cube"
+    position: [0.3, 0.4, 0.05]  # [x, y, z] in meters
+    color: [1, 0, 0, 1]  # [r, g, b, a] (0.0-1.0)
+    scale: 1.0
+
+  - name: "blue_cube"
+    type: "cube"
+    position: [0.3, 0.2, 0.05]
+    color: [0, 0, 1, 1]
+    scale: 1.0
+
+task:
+  description: "Stack the red cube on top of the blue cube"
+```
+
+**Run with your custom scene:**
+```bash
+python main.py --scene my_scene
+streamlit run main_interactive.py -- --scene my_scene
+```
+
+See [scenes/README.md](scenes/README.md) for detailed format documentation.
+
 ### Changing the Task
 
-Edit [prompts/llm_task_init.txt](prompts/llm_task_init.txt) to specify a new task in natural language.
+Edit the `task.description` field in your scene YAML file.
 
-Example: "Create a stack that is in this order from bottom to up: blue cube, yellow cube, green cube, purple cube, red cube"
+Example: `"Create a stack that is in this order from bottom to up: blue cube, yellow cube, green cube, purple cube, red cube"`
 
 ### Adding New Objects
 
-1. Load object in [main.py](main.py:68-73) using `object_manager.load_cube()`
-2. Update prompt templates to include new object names in `OBJECTS_LIST`
-3. Object positions and dimensions are automatically queried
+Add new object entries to the `objects` list in your scene YAML file. Object positions and dimensions are automatically queried by the LLM system.
 
 ### Modifying LLM Prompts
 
@@ -249,6 +300,8 @@ Captured panoramas are saved to `images/` with sequential numbering. Review thes
 
 **Configuration-first design**: All parameters live in [src/config.py](src/config.py). Never hardcode values in implementation files.
 
+**Scene-based configuration**: Objects and tasks are defined in YAML files ([scenes/](scenes/)), separating data from code. The [src/scene_loader.py](src/scene_loader.py) module handles loading and validation.
+
 **State management**: [src/simulation_state.py](src/simulation_state.py) maintains simulation time and debug visualization state, passed through all movement operations.
 
 **Object registry**: [src/object_manager.py](src/object_manager.py) maintains a `name → PyBullet ID` mapping. Always use object names, not IDs, in high-level code.
@@ -256,5 +309,5 @@ Captured panoramas are saved to `images/` with sequential numbering. Review thes
 **Prompt-driven behavior**: The system's task execution is entirely driven by LLM interpretation of prompts. Changing prompts changes behavior without code modifications.
 
 **Dual execution modes**:
-- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans
+- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans. Task loaded from scene YAML file.
 - **Interactive mode** ([main_interactive.py](main_interactive.py)): Conversational control using Claude's native tool calling API with 11 available tools. System prompt defined in [prompts/interactive_system_prompt.txt](prompts/interactive_system_prompt.txt).

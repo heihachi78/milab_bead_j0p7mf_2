@@ -1,2 +1,0 @@
-Create a stack that is in this order from bottom to up:
-blue cube, yellow cube, green cube, purple cube, red cube

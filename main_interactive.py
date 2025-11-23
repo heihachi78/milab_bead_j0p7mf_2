@@ -9,6 +9,7 @@ import pybullet as p
 import pybullet_data
 import os
 import glob
+import sys
 import streamlit as st
 import base64
 from io import BytesIO
@@ -21,6 +22,7 @@ from src.robot_controller import RobotController
 from src.camera_manager import CameraManager
 from src.interactive_llm_controller import InteractiveLLMController
 from src.logger import SimulationLogger
+from src.scene_loader import load_scene, list_available_scenes, SceneLoadError
 
 
 # Streamlit page configuration
@@ -48,6 +50,23 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+def get_scene_name_from_args():
+    """Extract scene name from command line arguments."""
+    # Streamlit uses -- to separate its args from script args
+    # Usage: streamlit run main_interactive.py -- --scene my_scene
+    scene_name = DEFAULT_SCENE
+
+    if "--scene" in sys.argv:
+        try:
+            scene_idx = sys.argv.index("--scene")
+            if scene_idx + 1 < len(sys.argv):
+                scene_name = sys.argv[scene_idx + 1]
+        except (ValueError, IndexError):
+            pass
+
+    return scene_name
+
+
 @st.cache_resource
 def initialize_simulation():
     """Initialize PyBullet simulation and all components (cached)."""
@@ -55,6 +74,20 @@ def initialize_simulation():
     # Initialize logger
     logger = SimulationLogger(log_dir=LOGS_FOLDER, session_name=LOG_SESSION_NAME)
     logger.console_info("Initializing interactive simulation...")
+
+    # Load scene configuration
+    scene_name = get_scene_name_from_args()
+    try:
+        scene = load_scene(scene_name)
+        logger.console_info(f"Loaded scene: {scene.metadata.name}")
+        logger.app_logger.info(f"Scene: {scene.metadata.name} - {scene.metadata.description}")
+        logger.app_logger.info(f"Objects in scene: {', '.join(scene.get_object_names())}")
+    except SceneLoadError as e:
+        print(f"ERROR: Failed to load scene '{scene_name}': {e}")
+        logger.app_logger.error(f"Failed to load scene '{scene_name}': {e}")
+        logger.close()
+        st.error(f"Failed to load scene '{scene_name}': {e}")
+        st.stop()
 
     # Connect to PyBullet
     clid = p.connect(p.SHARED_MEMORY)
@@ -102,14 +135,15 @@ def initialize_simulation():
     p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
     logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
 
-    # Load objects
+    # Load objects from scene configuration
     logger.console_info("Loading objects into scene...")
-    object_manager.load_cube('blue_cube', BLUE_CUBE_POS, BLUE_COLOR)
-    object_manager.load_cube('red_cube', RED_CUBE_POS, RED_COLOR)
-    object_manager.load_cube('green_cube', GREEN_CUBE_POS, GREEN_COLOR)
-    object_manager.load_cube('yellow_cube', YELLOW_CUBE_POS, YELLOW_COLOR)
-    object_manager.load_cube('purple_cube', PURPLE_CUBE_POS, PURPLE_COLOR)
-    logger.console_info("All objects loaded successfully")
+    for obj in scene.objects:
+        if obj.type == 'cube':
+            object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
+            logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
+        else:
+            logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
+    logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
 
     # Stabilization loop
     logger.console_info("Running stabilization loop...")
@@ -133,7 +167,8 @@ def initialize_simulation():
         "controller": interactive_controller,
         "object_manager": object_manager,
         "robot_controller": robot_controller,
-        "logger": logger
+        "logger": logger,
+        "scene": scene
     }
 
 
@@ -162,6 +197,7 @@ def main():
     controller = sim_components["controller"]
     object_manager = sim_components["object_manager"]
     robot_controller = sim_components["robot_controller"]
+    scene = sim_components["scene"]
 
     # Initialize session state
     if "messages" not in st.session_state:
@@ -176,6 +212,11 @@ def main():
     # Sidebar with scene information
     with st.sidebar:
         st.header("Scene Information")
+
+        # Display scene metadata
+        st.markdown(f"**Scene**: {scene.metadata.name}")
+        st.caption(scene.metadata.description)
+        st.divider()
 
         # Display objects
         st.subheader("Objects in Scene")

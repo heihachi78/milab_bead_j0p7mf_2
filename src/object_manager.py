@@ -13,7 +13,7 @@ class ObjectManager:
         self.objects = {}
         self.logger = logger
 
-    def load_cube(self, name, position, color, scale=OBJECT_SCALE):
+    def load_cube(self, name, position, color, scale=1.0):
         """
         Load a cube URDF and register it with a name.
 
@@ -21,7 +21,7 @@ class ObjectManager:
             name: Unique identifier for the object
             position: Base position [x, y, z]
             color: RGBA color [r, g, b, a]
-            scale: Global scaling factor
+            scale: Global scaling factor (default: 1.0)
 
         Returns:
             PyBullet object ID
