@@ -1,0 +1,22 @@
+# Example Stacking Scene
+# This scene demonstrates a different arrangement and task
+
+metadata:
+  name: "Example Stacking Scene"
+  description: "Close cubes"
+
+objects:
+  - name: "red_cube"
+    type: "cube"
+    position: [0.3, 0.3, 0.05]
+    color: [1, 0, 0, 1]  # RGBA
+    scale: 1.0
+
+  - name: "green_cube"
+    type: "cube"
+    position: [0.3, 0.35, 0.05]
+    color: [0, 1, 0, 1]  # RGBA
+    scale: 1.0
+
+task:
+  description: "Place the red cube on top of the green"

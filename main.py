@@ -95,6 +95,12 @@ logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
 
 # Stabilization loop
 logger.console_info("Running stabilization loop...")
+# First stabilize robot at rest pose with motors active
+robot_controller.stabilize()
+# Reset gripper orientation (move_to_target_smooth runs simulation internally)
+robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
+robot_controller.reset_orientation()
+# Allow system to settle with correct orientation
 for i in range(STABILIZATION_LOOP_STEPS):
     p.stepSimulation()
 logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")

@@ -3,7 +3,7 @@
 
 metadata:
   name: "Example Stacking Scene"
-  description: "Tower to two stacks"
+  description: "Raining cubes"
 
 objects:
   - name: "red_cube"

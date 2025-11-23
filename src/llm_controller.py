@@ -106,5 +106,15 @@ class LLMController:
                     self.logger.console_progress(f"Executing command {i}/{len(commands)}: place_on({object_name})")
                 self.robot_controller.place_on(object_name)
 
+            elif action == 'rotate_gripper_90':
+                if self.logger:
+                    self.logger.console_progress(f"Executing command {i}/{len(commands)}: rotate_gripper_90()")
+                self.robot_controller.rotate_orientation_90()
+
+            elif action == 'reset_gripper_orientation':
+                if self.logger:
+                    self.logger.console_progress(f"Executing command {i}/{len(commands)}: reset_gripper_orientation()")
+                self.robot_controller.reset_orientation()
+
             else:
                 raise ValueError(f"Command {i}: Unknown action '{action}'")
