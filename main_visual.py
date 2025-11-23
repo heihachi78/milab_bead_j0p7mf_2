@@ -140,7 +140,7 @@ def main():
             # Keep simulation running if real-time mode is disabled
             if not USE_REAL_TIME_SIMULATION:
                 p.stepSimulation()
-            time.sleep(0.01)  # Small sleep to prevent 100% CPU usage
+            time.sleep(0.1)  # 100ms sleep to prevent excessive CPU usage
     except KeyboardInterrupt:
         logger.console_info("\nShutting down PyBullet GUI server...")
         p.disconnect()

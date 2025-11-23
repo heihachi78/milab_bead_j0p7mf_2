@@ -89,15 +89,19 @@ def initialize_simulation():
         st.stop()
 
     # Initialize PyBullet using RobotController's static method
+    logger.console_info("Connecting to PyBullet...")
     armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='shared_only')
     endEffectorIndex = END_EFFECTOR_INDEX
+    logger.console_info(f"Connection mode: {connection_mode}")
 
     # Initialize simulation components
+    logger.console_info("Initializing simulation components...")
     simulation_state = SimulationState()
     object_manager = ObjectManager(logger)
     camera_manager = CameraManager(logger)
     robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager, logger)
     logger.app_logger.info("Simulation components initialized")
+    logger.console_info("✓ Simulation components initialized")
 
     # Clear images folder from previous runs
     images_folder = IMAGES_FOLDER
@@ -110,11 +114,16 @@ def initialize_simulation():
     # Check if objects are already loaded (from GUI server) - only relevant in shared memory mode
     existing_objects = []
     if connection_mode == 'shared':
-        for i in range(p.getNumBodies()):
+        logger.console_info("Checking for existing objects in shared memory...")
+        num_bodies = p.getNumBodies()
+        logger.console_info(f"Found {num_bodies} bodies in simulation")
+        for i in range(num_bodies):
             body_info = p.getBodyInfo(i)
             body_name = body_info[0].decode('utf-8')
+            logger.console_info(f"Body {i}: {body_name}")
             if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
                 existing_objects.append((i, body_name))
+        logger.console_info(f"Found {len(existing_objects)} existing objects")
 
     if connection_mode == 'shared' and len(existing_objects) >= len(scene.objects):
         # Objects already loaded by GUI server, just register them
@@ -163,6 +172,10 @@ def initialize_simulation():
         logger
     )
     logger.app_logger.info("Interactive LLM controller initialized")
+    logger.console_info("✓ Interactive LLM controller initialized")
+
+    # Log registered objects
+    logger.console_info(f"Registered objects: {list(object_manager.objects.keys())}")
     logger.console_info("Interactive mode ready!")
 
     return {
@@ -193,8 +206,12 @@ def main():
     st.markdown("Interact with the Franka Panda robot using natural language commands")
 
     # Initialize simulation (cached)
-    with st.spinner("Initializing simulation..."):
-        sim_components = initialize_simulation()
+    try:
+        with st.spinner("Initializing simulation..."):
+            sim_components = initialize_simulation()
+    except Exception as e:
+        st.error(f"Failed to initialize simulation: {e}")
+        st.stop()
 
     controller = sim_components["controller"]
     object_manager = sim_components["object_manager"]
@@ -222,21 +239,30 @@ def main():
 
         # Display objects
         st.subheader("Objects in Scene")
-        objects_list = []
-        for obj_name in object_manager.objects.keys():
-            pos = object_manager.get_object_center_position(obj_name)
-            objects_list.append(f"**{obj_name}**: [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]")
+        try:
+            objects_list = []
+            for obj_name in object_manager.objects.keys():
+                try:
+                    pos = object_manager.get_object_center_position(obj_name)
+                    objects_list.append(f"**{obj_name}**: [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]")
+                except Exception as e:
+                    objects_list.append(f"**{obj_name}**: Error getting position ({e})")
 
-        for obj_info in objects_list:
-            st.markdown(obj_info)
+            for obj_info in objects_list:
+                st.markdown(obj_info)
+        except Exception as e:
+            st.error(f"Error displaying objects: {e}")
 
         # Display gripper state
         st.subheader("Gripper State")
-        gripper_pos = robot_controller.get_end_effector_position()
-        gripper_state = "Open" if robot_controller.current_gripper_pos > 0.02 else "Closed"
+        try:
+            gripper_pos = robot_controller.get_end_effector_position()
+            gripper_state = "Open" if robot_controller.current_gripper_pos > 0.02 else "Closed"
 
-        st.markdown(f"**Position**: [{gripper_pos[0]:.3f}, {gripper_pos[1]:.3f}, {gripper_pos[2]:.3f}]")
-        st.markdown(f"**State**: {gripper_state}")
+            st.markdown(f"**Position**: [{gripper_pos[0]:.3f}, {gripper_pos[1]:.3f}, {gripper_pos[2]:.3f}]")
+            st.markdown(f"**State**: {gripper_state}")
+        except Exception as e:
+            st.error(f"Error displaying gripper state: {e}")
 
         # Display token usage
         st.divider()

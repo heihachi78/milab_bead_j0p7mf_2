@@ -37,7 +37,8 @@ except SceneLoadError as e:
     exit(1)
 
 # Initialize PyBullet using RobotController's static method
-armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='auto', configure_gui=True)
+# Use 'gui' mode to directly open GUI window (skips shared memory check that hangs on macOS)
+armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='gui', configure_gui=True)
 endEffectorIndex = END_EFFECTOR_INDEX
 
 # Initialize simulation components

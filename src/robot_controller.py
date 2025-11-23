@@ -42,8 +42,28 @@ class RobotController:
                 if logger:
                     logger.console_info("Connected to PyBullet GUI server")
         elif mode == 'shared_only':
-            # Try shared memory first, then fall back to direct (headless)
-            clid = p.connect(p.SHARED_MEMORY)
+            # Try shared memory first with timeout, then fall back to direct (headless)
+            import signal
+
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Shared memory connection timed out")
+
+            clid = -1
+            try:
+                # Set 2 second timeout for connection attempt
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(2)
+                clid = p.connect(p.SHARED_MEMORY)
+                signal.alarm(0)  # Cancel alarm
+            except TimeoutError:
+                signal.alarm(0)  # Cancel alarm
+                if logger:
+                    logger.console_info("Shared memory connection timed out")
+            except Exception as e:
+                signal.alarm(0)  # Cancel alarm
+                if logger:
+                    logger.console_info(f"Shared memory connection failed: {e}")
+
             if clid < 0:
                 if logger:
                     logger.console_info("No PyBullet GUI server found, using headless mode")
@@ -69,8 +89,9 @@ class RobotController:
         else:
             raise ValueError(f"Invalid mode: {mode}. Must be 'auto', 'shared_only', 'gui', or 'direct'")
 
-        # Configure debug visualizer if requested (typically for GUI mode)
-        if configure_gui:
+        # Configure debug visualizer if requested (only for GUI/shared modes, not DIRECT)
+        # Note: configureDebugVisualizer can hang on macOS in DIRECT mode
+        if configure_gui and connection_mode != 'direct':
             p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
