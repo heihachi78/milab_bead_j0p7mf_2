@@ -2,7 +2,6 @@
 #https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics_husky_kuka.py
 
 import pybullet as p
-import pybullet_data
 import os
 import glob
 import argparse
@@ -37,34 +36,9 @@ except SceneLoadError as e:
     logger.close()
     exit(1)
 
-# Connect to PyBullet
-clid = p.connect(p.SHARED_MEMORY)
-if (clid < 0):
-    p.connect(p.GUI)
-
-p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
-p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
-p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
-p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
-p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
-
-p.setAdditionalSearchPath(pybullet_data.getDataPath())
-logger.app_logger.info("PyBullet connected successfully")
-
-# Load plane and robot
-p.loadURDF("plane.urdf", PLANE_POSITION)
-logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
-
-armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
-p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
+# Initialize PyBullet using RobotController's static method
+armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='auto', configure_gui=True)
 endEffectorIndex = END_EFFECTOR_INDEX
-numJoints = p.getNumJoints(armId)
-logger.app_logger.info(f"Loaded Franka Panda robot with {numJoints} joints")
-logger.console_info(f"Robot loaded: {numJoints} joints")
-
-# Set gravity
-p.setGravity(0, 0, GRAVITY)
-logger.app_logger.info(f"Gravity set to {GRAVITY}")
 
 # Initialize simulation components
 simulation_state = SimulationState()

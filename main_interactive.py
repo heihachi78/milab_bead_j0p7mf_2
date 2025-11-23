@@ -6,7 +6,6 @@ the robot simulation through natural language commands via Claude LLM.
 """
 
 import pybullet as p
-import pybullet_data
 import os
 import glob
 import sys
@@ -89,51 +88,9 @@ def initialize_simulation():
         st.error(f"Failed to load scene '{scene_name}': {e}")
         st.stop()
 
-    # Connect to PyBullet
-    # Try to connect to existing GUI server (started by main_visual.py)
-    clid = p.connect(p.SHARED_MEMORY)
-    if clid < 0:
-        # If no server is running, use DIRECT mode (headless) to avoid macOS threading issues
-        logger.console_info("No PyBullet GUI server found, using headless mode")
-        logger.console_info("Tip: Run 'python main_visual.py' in another terminal for visualization")
-        p.connect(p.DIRECT)
-    else:
-        logger.console_info("Connected to PyBullet GUI server")
-
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    logger.app_logger.info("PyBullet connected successfully")
-
-    # Get references to already-loaded plane and robot from the server
-    # The GUI server (main_visual.py) should have already loaded these
-    # We just need to find them
-    armId = None
-    for i in range(p.getNumBodies()):
-        body_info = p.getBodyInfo(i)
-        body_name = body_info[0].decode('utf-8')
-        if 'panda' in body_name.lower() or i == 1:  # Robot is typically body ID 1
-            armId = i
-            break
-
-    if armId is None:
-        # If no robot found, we're probably in DIRECT mode, need to create everything
-        logger.console_info("No existing simulation found, creating new one...")
-        p.loadURDF("plane.urdf", PLANE_POSITION)
-        logger.app_logger.info(f"Loaded plane at {PLANE_POSITION}")
-
-        armId = p.loadURDF("franka_panda/panda.urdf", ROBOT_BASE_POSITION, useFixedBase=True)
-        p.resetBasePositionAndOrientation(armId, ROBOT_BASE_POSITION, ROBOT_BASE_ORIENTATION)
-        logger.app_logger.info(f"Loaded Franka Panda robot")
-
-        p.setGravity(0, 0, GRAVITY)
-        logger.app_logger.info(f"Gravity set to {GRAVITY}")
-
-        p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
-        logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
-
+    # Initialize PyBullet using RobotController's static method
+    armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='shared_only')
     endEffectorIndex = END_EFFECTOR_INDEX
-    numJoints = p.getNumJoints(armId)
-    logger.app_logger.info(f"Using Franka Panda robot with {numJoints} joints (ID: {armId})")
-    logger.console_info(f"Robot ready: {numJoints} joints")
 
     # Initialize simulation components
     simulation_state = SimulationState()
@@ -150,15 +107,16 @@ def initialize_simulation():
             os.remove(file)
         logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
 
-    # Check if objects are already loaded (from GUI server)
+    # Check if objects are already loaded (from GUI server) - only relevant in shared memory mode
     existing_objects = []
-    for i in range(p.getNumBodies()):
-        body_info = p.getBodyInfo(i)
-        body_name = body_info[0].decode('utf-8')
-        if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
-            existing_objects.append((i, body_name))
+    if connection_mode == 'shared':
+        for i in range(p.getNumBodies()):
+            body_info = p.getBodyInfo(i)
+            body_name = body_info[0].decode('utf-8')
+            if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
+                existing_objects.append((i, body_name))
 
-    if len(existing_objects) >= len(scene.objects):
+    if connection_mode == 'shared' and len(existing_objects) >= len(scene.objects):
         # Objects already loaded by GUI server, just register them
         logger.console_info(f"Using {len(existing_objects)} objects from GUI server...")
         # Register existing objects with object_manager
