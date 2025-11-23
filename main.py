@@ -42,6 +42,12 @@ clid = p.connect(p.SHARED_MEMORY)
 if (clid < 0):
     p.connect(p.GUI)
 
+p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
+p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)
+p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 0)
+p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 0)
+
 p.setAdditionalSearchPath(pybullet_data.getDataPath())
 logger.app_logger.info("PyBullet connected successfully")
 
