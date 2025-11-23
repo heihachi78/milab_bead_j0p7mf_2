@@ -8,7 +8,6 @@ the robot simulation through natural language commands via Claude LLM.
 import pybullet as p
 import os
 import glob
-import sys
 import streamlit as st
 import base64
 from io import BytesIO
@@ -21,7 +20,6 @@ from src.robot_controller import RobotController
 from src.camera_manager import CameraManager
 from src.interactive_llm_controller import InteractiveLLMController
 from src.logger import SimulationLogger
-from src.scene_loader import load_scene, list_available_scenes, SceneLoadError
 
 
 # Streamlit page configuration
@@ -49,50 +47,29 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def get_scene_name_from_args():
-    """Extract scene name from command line arguments."""
-    # Streamlit uses -- to separate its args from script args
-    # Usage: streamlit run main_interactive.py -- --scene my_scene
-    scene_name = DEFAULT_SCENE
-
-    if "--scene" in sys.argv:
-        try:
-            scene_idx = sys.argv.index("--scene")
-            if scene_idx + 1 < len(sys.argv):
-                scene_name = sys.argv[scene_idx + 1]
-        except (ValueError, IndexError):
-            pass
-
-    return scene_name
 
 
 @st.cache_resource
 def initialize_simulation():
-    """Initialize PyBullet simulation and all components (cached)."""
+    """Initialize PyBullet simulation and all components (cached).
+
+    Connects to PyBullet via shared memory. Requires main_visual.py to be running first.
+    All scene setup (objects, robot) is handled by the visual server.
+    """
 
     # Initialize logger
     logger = SimulationLogger(log_dir=LOGS_FOLDER, session_name=LOG_SESSION_NAME)
     logger.console_info("Initializing interactive simulation...")
 
-    # Load scene configuration
-    scene_name = get_scene_name_from_args()
-    try:
-        scene = load_scene(scene_name)
-        logger.console_info(f"Loaded scene: {scene.metadata.name}")
-        logger.app_logger.info(f"Scene: {scene.metadata.name} - {scene.metadata.description}")
-        logger.app_logger.info(f"Objects in scene: {', '.join(scene.get_object_names())}")
-    except SceneLoadError as e:
-        print(f"ERROR: Failed to load scene '{scene_name}': {e}")
-        logger.app_logger.error(f"Failed to load scene '{scene_name}': {e}")
-        logger.close()
-        st.error(f"Failed to load scene '{scene_name}': {e}")
-        st.stop()
-
-    # Initialize PyBullet using RobotController's static method
-    logger.console_info("Connecting to PyBullet...")
+    # Connect to PyBullet shared memory (requires main_visual.py to be running)
+    logger.console_info("Connecting to PyBullet shared memory...")
     armId, connection_mode = RobotController.initialize_pybullet(logger=logger, mode='shared_only')
     endEffectorIndex = END_EFFECTOR_INDEX
-    logger.console_info(f"Connection mode: {connection_mode}")
+
+    if connection_mode != 'shared':
+        raise RuntimeError("Failed to connect to PyBullet shared memory. Please start main_visual.py first.")
+
+    logger.console_info("Connected to PyBullet shared memory")
 
     # Initialize simulation components
     logger.console_info("Initializing simulation components...")
@@ -101,7 +78,7 @@ def initialize_simulation():
     camera_manager = CameraManager(logger)
     robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager, logger)
     logger.app_logger.info("Simulation components initialized")
-    logger.console_info("✓ Simulation components initialized")
+    logger.console_info("Simulation components initialized")
 
     # Clear images folder from previous runs
     images_folder = IMAGES_FOLDER
@@ -111,56 +88,24 @@ def initialize_simulation():
             os.remove(file)
         logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
 
-    # Check if objects are already loaded (from GUI server) - only relevant in shared memory mode
-    existing_objects = []
-    if connection_mode == 'shared':
-        logger.console_info("Checking for existing objects in shared memory...")
-        num_bodies = p.getNumBodies()
-        logger.console_info(f"Found {num_bodies} bodies in simulation")
-        for i in range(num_bodies):
-            body_info = p.getBodyInfo(i)
-            body_name = body_info[0].decode('utf-8')
-            logger.console_info(f"Body {i}: {body_name}")
-            if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
-                existing_objects.append((i, body_name))
-        logger.console_info(f"Found {len(existing_objects)} existing objects")
+    # Discover and register objects already loaded by the visual server
+    logger.console_info("Discovering objects from visual server...")
+    num_bodies = p.getNumBodies()
+    logger.console_info(f"Found {num_bodies} bodies in simulation")
 
-    if connection_mode == 'shared' and len(existing_objects) >= len(scene.objects):
-        # Objects already loaded by GUI server, just register them
-        logger.console_info(f"Using {len(existing_objects)} objects from GUI server...")
-        # Register existing objects with object_manager
-        for obj_id, obj_name in existing_objects:
-            # Try to match with scene objects by name or position
-            for scene_obj in scene.objects:
-                if scene_obj.name in obj_name or obj_name in scene_obj.name:
-                    object_manager.objects[scene_obj.name] = obj_id
-                    logger.app_logger.info(f"Registered existing object: {scene_obj.name} (ID: {obj_id})")
+    for i in range(num_bodies):
+        body_info = p.getBodyInfo(i)
+        body_name = body_info[0].decode('utf-8')
+        logger.console_info(f"Body {i}: {body_name}")
 
-        # If names don't match, register by order
-        if len(object_manager.objects) == 0:
-            for idx, (obj_id, _) in enumerate(existing_objects):
-                if idx < len(scene.objects):
-                    object_manager.objects[scene.objects[idx].name] = obj_id
-                    logger.app_logger.info(f"Registered object by order: {scene.objects[idx].name} (ID: {obj_id})")
-    else:
-        # Load objects from scene configuration
-        logger.console_info("Loading objects into scene...")
-        for obj in scene.objects:
-            if obj.type == 'cube':
-                object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
-                logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
-            else:
-                logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
-        logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
+        # Register objects (skip plane and robot)
+        if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
+            # Extract object name from the body name (usually in format: path/name.urdf or just name)
+            obj_name = body_name.replace('.urdf', '').split('/')[-1]
+            object_manager.objects[obj_name] = i
+            logger.app_logger.info(f"Registered object: {obj_name} (ID: {i})")
 
-        # Stabilization loop (only if we loaded objects ourselves)
-        logger.console_info("Running stabilization loop...")
-        robot_controller.stabilize()
-        robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
-        robot_controller.reset_orientation()
-        for i in range(STABILIZATION_LOOP_STEPS):
-            p.stepSimulation()
-        logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")
+    logger.console_info(f"Registered {len(object_manager.objects)} objects from visual server")
 
     # Initialize Interactive LLM Controller
     logger.console_info("Initializing interactive LLM controller...")
@@ -172,7 +117,7 @@ def initialize_simulation():
         logger
     )
     logger.app_logger.info("Interactive LLM controller initialized")
-    logger.console_info("✓ Interactive LLM controller initialized")
+    logger.console_info("Interactive LLM controller initialized")
 
     # Log registered objects
     logger.console_info(f"Registered objects: {list(object_manager.objects.keys())}")
@@ -182,8 +127,7 @@ def initialize_simulation():
         "controller": interactive_controller,
         "object_manager": object_manager,
         "robot_controller": robot_controller,
-        "logger": logger,
-        "scene": scene
+        "logger": logger
     }
 
 
@@ -216,7 +160,6 @@ def main():
     controller = sim_components["controller"]
     object_manager = sim_components["object_manager"]
     robot_controller = sim_components["robot_controller"]
-    scene = sim_components["scene"]
 
     # Initialize session state
     if "messages" not in st.session_state:
@@ -231,11 +174,6 @@ def main():
     # Sidebar with scene information
     with st.sidebar:
         st.header("Scene Information")
-
-        # Display scene metadata
-        st.markdown(f"**Scene**: {scene.metadata.name}")
-        st.caption(scene.metadata.description)
-        st.divider()
 
         # Display objects
         st.subheader("Objects in Scene")

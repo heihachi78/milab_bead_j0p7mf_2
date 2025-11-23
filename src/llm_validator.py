@@ -441,21 +441,21 @@ class LLMValidator:
             if critique.get('is_valid', False):
                 if self.logger:
                     self.logger.log_app_plan_validated(f"Valid after {iteration + 1} iteration(s)")
-                    self.logger.console_success(f"✓ Plan validated successfully (iteration {iteration + 1})")
+                    self.logger.console_success(f"Plan validated successfully (iteration {iteration + 1})")
 
                 return current_plan, True, None
 
             # Plan needs refinement
             if self.logger:
                 self.logger.log_app_warning(f"Plan validation iteration {iteration + 1}: Issues found")
-                self.logger.console_warning(f"✗ Plan needs refinement (iteration {iteration + 1}/{max_iterations})")
+                self.logger.console_warning(f"Plan needs refinement (iteration {iteration + 1}/{max_iterations})")
                 self.logger.console_info(f"  Issue: {critique.get('critique', 'Unknown issue')}")
 
             # If this is the last iteration, return current plan with failure status
             if iteration == max_iterations - 1:
                 if self.logger:
                     self.logger.log_app_error(f"VALIDATION FAILED: Max iterations ({max_iterations}) reached without valid plan")
-                    self.logger.console_error(f"✗ Validation FAILED after {max_iterations} attempts")
+                    self.logger.console_error(f"Validation FAILED after {max_iterations} attempts")
                     self.logger.console_error(f"  Final issue: {critique.get('critique', 'Unknown issue')}")
                 return current_plan, False, final_critique
 

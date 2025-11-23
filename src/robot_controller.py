@@ -13,7 +13,7 @@ class RobotController:
     """
 
     @staticmethod
-    def initialize_pybullet(logger=None, mode='auto', configure_gui=False):
+    def initialize_pybullet(logger=None, mode='auto'):
         """
         Initialize PyBullet connection and load basic simulation environment.
 
@@ -57,7 +57,7 @@ class RobotController:
 
         # Configure debug visualizer if requested (only for GUI/shared modes, not DIRECT)
         # Note: configureDebugVisualizer can hang on macOS in DIRECT mode
-        if configure_gui and connection_mode != 'direct':
+        if connection_mode != 'direct':
             p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
             p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 0)

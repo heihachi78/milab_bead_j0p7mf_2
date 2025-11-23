@@ -4,361 +4,155 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an LLM-controlled PyBullet robotics simulation for a Franka Panda robotic arm. The system uses Anthropic's Claude API to generate, validate, and execute pick-and-place task plans based on natural language descriptions and visual scene understanding through multi-camera panoramas.
+This is a PyBullet-based Franka Panda robotic arm simulator with LLM-powered control using Anthropic's Claude API. The system supports two modes:
 
-**The project supports three execution modes:**
-1. **Batch Mode** ([main.py](main.py)): Automated task execution with plan validation
-2. **Interactive Mode** ([main_interactive.py](main_interactive.py)): Real-time chat interface for conversational robot control
-3. **Visual Server Mode** ([main_visual.py](main_visual.py)): PyBullet GUI server for macOS compatibility (enables GUI visualization for interactive mode)
+1. **Batch Mode** ([main.py](main.py)): Executes predefined tasks from YAML scene configurations with automatic plan generation and validation
+2. **Interactive Mode** ([main_interactive.py](main_interactive.py)): Streamlit-based chat interface for conversational robot control using Claude's tool calling API
 
-## Core Architecture
+## Setup and Running
 
-### Modular Component System
+### Prerequisites
+- Python 3.8+
+- PyBullet 3.2.5+
+- Anthropic API key
 
-The codebase follows a clean separation of concerns with distinct manager classes:
-
-- **[main.py](main.py)**: Batch mode orchestration script that initializes all components and runs the LLM-driven execution pipeline
-- **[main_interactive.py](main_interactive.py)**: Streamlit-based interactive chat interface (connects to visual server or runs headless)
-- **[main_visual.py](main_visual.py)**: PyBullet GUI server for macOS (runs on main thread, required due to NSWindow/AppKit threading restrictions)
-- **[src/config.py](src/config.py)**: Centralized configuration with all parameters (physics, robot, camera, LLM settings)
-- **[src/scene_loader.py](src/scene_loader.py)**: YAML-based scene configuration loader (objects and tasks)
-- **[src/robot_controller.py](src/robot_controller.py)**: Robot control logic (IK, motion planning, gripper operations, pick/place primitives)
-- **[src/object_manager.py](src/object_manager.py)**: Object loading, tracking, and position/dimension queries
-- **[src/camera_manager.py](src/camera_manager.py)**: Multi-camera panorama capture from 5 viewpoints (front/right/back/left/top)
-- **[src/simulation_state.py](src/simulation_state.py)**: Simulation state tracking (time, debug visualization)
-- **[src/llm_controller.py](src/llm_controller.py)**: Executes validated action plans using robot primitives (batch mode)
-- **[src/llm_validator.py](src/llm_validator.py)**: LLM-based plan generation and iterative validation workflow (batch mode)
-- **[src/interactive_llm_controller.py](src/interactive_llm_controller.py)**: Interactive conversational controller with native tool calling (interactive mode)
-- **[src/logger.py](src/logger.py)**: Comprehensive logging for app events, LLM interactions, and robot operations
-
-### LLM Validation Workflow
-
-The system uses a critique-refinement loop for plan validation ([src/llm_validator.py](src/llm_validator.py:357-412)):
-
-1. **Planning**: Generate initial plan from task description and panorama image
-2. **Review**: Critique plan for feasibility and correctness
-3. **Refinement**: Refine plan based on critique feedback
-4. Repeat review-refinement up to `MAX_VALIDATION_ITERATIONS` (default: 3)
-5. **Execution**: Execute validated plan via `LLMController`
-
-Each phase uses dedicated prompt templates from [prompts/](prompts/):
-- `planning_system_prompt.txt` / `planning_user_prompt.txt`
-- `review_system_prompt.txt` / `review_user_prompt.txt`
-- `refinement_system_prompt.txt` / `refinement_user_prompt.txt`
-
-### Action Plan Format
-
-Plans are JSON structures with a `commands` array. Supported actions:
-- `pick_up`: `{"action": "pick_up", "object": "cube_name"}`
-- `place`: `{"action": "place", "position": [x, y, z]}`
-- `place_on`: `{"action": "place_on", "object": "target_cube"}`
-
-See [src/llm_controller.py](src/llm_controller.py:67-113) for execution logic.
-
-### Robot Control Hierarchy
-
-**Movement primitives** ([src/robot_controller.py](src/robot_controller.py)):
-- `move_to_target()`: Low-level IK-based movement until convergence threshold is met
-- `move_to_target_smooth()`: Smooth linear interpolation movement at constant velocity (uses `LINEAR_MOVEMENT_SPEED` from config)
-
-**High-level operations**:
-- `pick_up(object_name)`: Multi-phase pick sequence (approach → open gripper → grasp → lift) with automatic panorama capture
-- `place(position)`: Place at absolute position [x, y, z]
-- `place_on(object_name)`: Place on top of another object
-
-Each operation uses different threshold values for different phases (over target, close target, precise) defined in [src/config.py](src/config.py:93-97).
-
-### Scene Configuration System
-
-[src/scene_loader.py](src/scene_loader.py) manages YAML-based scene definitions from the [scenes/](scenes/) directory:
-- **Scene metadata**: Name and description
-- **Object definitions**: Position, color, type, and scale for each object
-- **Task description**: Natural language task for batch mode execution
-
-Scene files use a validated YAML schema with automatic error checking. Both batch and interactive modes support the `--scene` CLI argument to load different configurations.
-
-### Camera System
-
-[src/camera_manager.py](src/camera_manager.py) captures 5-viewpoint panoramas:
-- 4 horizontal views (0°, 90°, 180°, 270°)
-- 1 top-down view (-89° pitch)
-
-Panoramas are saved after each robot operation with sequential numbering: `panorama_NNN_operation_name.png`
-
-The LLM receives these panoramas for visual scene understanding during plan generation and validation.
-
-## Development Commands
-
-### Running Batch Mode
-
-```bash
-python main.py
-python main.py --scene default
-python main.py --scene example_stacking
-```
-
-Launches PyBullet GUI and executes the LLM-driven task pipeline:
-1. Initialize simulation and stabilize robot
-2. Load scene configuration from YAML file (objects and task)
-3. Load objects into scene
-4. Capture initial panorama
-5. Generate and validate plan using Claude API
-6. Execute validated plan
-7. Save logs and close
-
-**CLI Arguments:**
-- `--scene SCENE_NAME`: Specify which scene to load (default: `default`)
-
-### Running Interactive Mode
-
-**macOS - With GUI Visualization (Two-Terminal Setup):**
-
-Terminal 1 - Start PyBullet GUI server:
-```bash
-python main_visual.py
-python main_visual.py --scene example_stacking
-```
-
-Terminal 2 - Start Streamlit interface:
-```bash
-streamlit run main_interactive.py
-streamlit run main_interactive.py -- --scene example_stacking
-```
-
-**Important:** Both terminals must use the **same `--scene` argument**. The visual server runs PyBullet GUI on the main thread (macOS requirement), while Streamlit connects via `p.SHARED_MEMORY`.
-
-**Linux/Windows - Direct Launch:**
-```bash
-streamlit run main_interactive.py
-streamlit run main_interactive.py -- --scene default
-```
-
-**Headless Mode (All Platforms):**
-
-If no visual server is running, the system automatically falls back to headless mode (`p.DIRECT`). You can still request panorama captures through the chat interface.
-
-**Interactive Mode Features:**
-- Web chat interface at http://localhost:8501
-- Real-time conversational robot control
-- Natural language command execution via Claude LLM
-- LLM uses 11 tools to query scene state and execute operations
-- On-demand panorama capture (only when LLM requests visual info)
-- Tool execution results displayed inline in chat
-- Conversation history maintained throughout session
-- PyBullet GUI visualization (when using visual server mode)
-
-### Installing Dependencies
-
-**Using pip:**
+### Installation
 ```bash
 pip install -r requirements.txt
 ```
 
-**Using conda (recommended for macOS):**
-```bash
-conda create -n pybullet_env python=3.11
-conda activate pybullet_env
-conda install -c conda-forge pybullet anthropic numpy pillow pyyaml python-dotenv streamlit scipy opencv jsonschema pytest
-```
-
-Required dependencies include: `pybullet`, `anthropic`, `numpy`, `pillow`, `python-dotenv`, `streamlit`
-
-**Note:** PyBullet installation via conda is more reliable on macOS due to native dependencies.
-
 ### Environment Configuration
-
-Create a `.env` file with:
+Create a `.env` file in the project root:
 ```
 ANTHROPIC_API_KEY=your_api_key_here
-ANTHROPIC_MODEL=claude-3-5-haiku-20241022
+ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
 ```
 
-The `ANTHROPIC_MODEL` can be overridden per-validation in [src/config.py](src/config.py:133) via `VALIDATION_MODEL`.
+### Running the Simulation
 
-## Key Configuration Parameters
-
-### LLM Settings ([src/config.py](src/config.py:131-133))
-
-- `MAX_VALIDATION_ITERATIONS`: Maximum critique-refinement cycles (default: 3)
-- `VALIDATION_MODEL`: Override model for validation (None = use `.env` model)
-
-### Robot Control Tuning
-
-- **Thresholds** (`THRESHOLD_OVER_TARGET`, `THRESHOLD_CLOSE_TARGET`, `THRESHOLD_PRECISE`, `THRESHOLD_PRECISE_STRICT`): Multi-phase precision control
-- **IK solver** (`IK_MAX_ITERATIONS`, `IK_RESIDUAL_THRESHOLD`): Balance solution quality vs. speed
-- **Motor forces** (`ARM_MOTOR_FORCE`, `GRIPPER_MOTOR_FORCE`): Movement speed and manipulation capability
-- **Movement speed** (`LINEAR_MOVEMENT_SPEED`): Velocity for smooth linear movements (default: 0.01 m/s)
-
-### Pick-and-Place Offsets
-
-Vertical approach strategy defined by offset constants:
-- `OVER_TARGET_Z`: High overhead position (0.5m)
-- `PICK_CLOSE_OFFSET`: Intermediate approach height
-- `PLACE_ON_TARGET_OFFSET`: Final placement height for stacking
-
-### Camera Configuration ([src/config.py](src/config.py:115-129))
-
-- `CAMERA_YAW_ANGLES` / `CAMERA_PITCH_ANGLES`: 5-viewpoint angles
-- `CAMERA_IMAGE_WIDTH` / `CAMERA_IMAGE_HEIGHT`: Resolution (default: 640x480)
-- `CAMERA_DISTANCE` / `CAMERA_FOV`: View parameters
-
-### Logging ([src/config.py](src/config.py:135-137))
-
-- `LOGS_FOLDER`: Log directory (default: 'logs')
-- `LOG_SESSION_NAME`: Custom session name (None = auto-timestamp)
-
-## Common Modifications
-
-### Creating Custom Scenes
-
-Scenes are defined in YAML files in the [scenes/](scenes/) directory. Each scene contains object definitions and a task description.
-
-**Create a new scene file** (e.g., `scenes/my_scene.yaml`):
-
-```yaml
-metadata:
-  name: "My Custom Scene"
-  description: "Description of your scene"
-
-objects:
-  - name: "red_cube"
-    type: "cube"
-    position: [0.3, 0.4, 0.05]  # [x, y, z] in meters
-    color: [1, 0, 0, 1]  # [r, g, b, a] (0.0-1.0)
-    scale: 1.0
-
-  - name: "blue_cube"
-    type: "cube"
-    position: [0.3, 0.2, 0.05]
-    color: [0, 0, 1, 1]
-    scale: 1.0
-
-task:
-  description: "Stack the red cube on top of the blue cube"
-```
-
-**Run with your custom scene:**
+**Batch Mode** (executes scene task automatically):
 ```bash
-# Batch mode
-python main.py --scene my_scene
-
-# Interactive mode (headless)
-streamlit run main_interactive.py -- --scene my_scene
-
-# Interactive mode with visual feedback (macOS)
-# Terminal 1:
-python main_visual.py --scene my_scene
-# Terminal 2:
-streamlit run main_interactive.py -- --scene my_scene
+python main.py --scene default
+python main.py --scene scene_1
 ```
 
-**Important:** When using visual server mode, ensure both `main_visual.py` and `main_interactive.py` are started with the same `--scene` argument so they load matching configurations.
-
-See [scenes/README.md](scenes/README.md) for detailed format documentation.
-
-### Changing the Task
-
-Edit the `task.description` field in your scene YAML file.
-
-Example: `"Create a stack that is in this order from bottom to up: blue cube, yellow cube, green cube, purple cube, red cube"`
-
-### Adding New Objects
-
-Add new object entries to the `objects` list in your scene YAML file. Object positions and dimensions are automatically queried by the LLM system.
-
-### Modifying LLM Prompts
-
-Edit files in [prompts/](prompts/):
-- **Planning prompts**: Control how initial plans are generated
-- **Review prompts**: Control how plans are critiqued
-- **Refinement prompts**: Control how plans are improved
-
-Prompts use template variables like `{OBJECTS_LIST}`, `{OBJECTS_INFO}`, `{TASK_DESCRIPTION}`.
-
-### Using Interactive Mode with Visual Feedback
-
-**For macOS users (required for GUI visualization):**
-
-Terminal 1 - Start visual server:
-```bash
-python main_visual.py
-```
-
-Terminal 2 - Launch Streamlit interface:
+**Interactive Mode** (Streamlit chat interface):
 ```bash
 streamlit run main_interactive.py
 ```
 
-**Why this is needed on macOS:**
-macOS requires all GUI window creation (NSWindow/AppKit) to happen on the main thread. Streamlit runs Python scripts in a background thread, which triggers an `NSInternalInconsistencyException` when PyBullet tries to create a GUI window. The solution is to run PyBullet's GUI in a separate process ([main_visual.py](main_visual.py)) that owns the main thread, while Streamlit ([main_interactive.py](main_interactive.py)) connects to it via shared memory (`p.SHARED_MEMORY`).
+Available scenes can be found in [scenes/](scenes/) directory.
 
-Linux and Windows don't have this threading restriction, but the dual-process approach works on all platforms.
+## Core Architecture
 
-**Using the interface:**
+### Key Components
 
-The web interface opens at `http://localhost:8501` with a chat interface. Example commands:
-- "What objects are in the scene?"
-- "Pick up the blue cube"
-- "Show me the scene" (triggers panorama capture)
-- "Move the gripper to [0.3, 0.4, 0.2]"
-- "Stack the red cube on the blue cube"
+The system follows a modular architecture with clear separation of concerns:
 
-The LLM has access to 11 tools:
-1. **Query Tools**: `get_gripper_position`, `get_gripper_state`, `get_object_position`, `get_all_objects`, `get_panorama`
-2. **Movement Tools**: `move_gripper`, `move_gripper_smooth`
-3. **Gripper Tools**: `open_gripper`, `close_gripper`
-4. **High-Level Tools**: `pick_up_object`, `place_object`, `place_on_object`
+- **RobotController** ([src/robot_controller.py](src/robot_controller.py)): Low-level robot control, IK solving, gripper operations, and pick-and-place primitives. Handles PyBullet initialization and connection modes (GUI, headless, or shared memory).
 
-Tool results are displayed inline in the chat interface. The sidebar shows real-time scene information.
+- **ObjectManager** ([src/object_manager.py](src/object_manager.py)): Object registry, URDF loading, position/dimension queries. Maintains a dictionary mapping object names to PyBullet IDs.
 
-### Adjusting Validation Rigor
+- **CameraManager** ([src/camera_manager.py](src/camera_manager.py)): Multi-angle panorama capture (front, right, back, left, top). Images saved to [images/](images/) folder with timestamps.
 
-Increase `MAX_VALIDATION_ITERATIONS` in [src/config.py](src/config.py:132) for more thorough validation at the cost of additional API calls.
+- **SimulationState** ([src/simulation_state.py](src/simulation_state.py)): Tracks simulation time and state.
 
-### Using Different Claude Models
+- **LLMController** ([src/llm_controller.py](src/llm_controller.py)): Executes validated command plans in batch mode. Commands: `pick_up`, `place`, `place_on`, `rotate_orientation_90`, `reset_orientation`.
 
-Change `ANTHROPIC_MODEL` in `.env` or set `VALIDATION_MODEL` in [src/config.py](src/config.py:133). Available models include Haiku, Sonnet, and Opus variants.
+- **LLMValidator** ([src/llm_validator.py](src/llm_validator.py)): Plan generation and validation loop for batch mode. Uses a critique-refinement cycle with separate planning and review prompts. Maximum iterations configured via `MAX_VALIDATION_ITERATIONS` in [src/config.py](src/config.py).
 
-## Debugging
+- **InteractiveLLMController** ([src/interactive_llm_controller.py](src/interactive_llm_controller.py)): Claude native tool calling for conversational robot control. Defines tools for object queries, gripper control, movement commands, and panorama capture. Manages conversation history and token usage.
 
-### Visualization
+### Configuration
 
-Debug trails are automatically drawn when `hasPrevPose=1` in simulation state:
-- Blue line (`DEBUG_LINE_COLOR_1`): Target trajectory
-- Red line (`DEBUG_LINE_COLOR_2`): Actual end-effector trajectory
+All configuration is centralized in [src/config.py](src/config.py):
+- Robot kinematics parameters (joint limits, IK solver settings)
+- Physics parameters (gravity, motor forces, simulation timing)
+- Movement thresholds and offsets for pick/place operations
+- Camera settings (resolution, FOV, panorama angles)
+- LLM settings (validation iterations, max tokens, prompt caching)
+- Logging configuration
 
-Control persistence with `TRAIL_DURATION` in [src/config.py](src/config.py:51).
+### Scene Configuration
+
+Scenes are defined in YAML files in [scenes/](scenes/) directory. Each scene specifies:
+- **metadata**: Name and description
+- **objects**: List of objects with name, type (currently only "cube"), position, color (RGBA), and scale
+- **task**: Natural language description for batch mode
+
+See [scenes/README.md](scenes/README.md) for detailed format and creation guidelines.
+
+### LLM Prompts
+
+Prompt templates are stored in [prompts/](prompts/) directory:
+- **Batch mode**: `planning_system_prompt.txt`, `planning_user_prompt.txt`, `review_system_prompt.txt`, `review_user_prompt.txt`, `refinement_system_prompt.txt`, `refinement_user_prompt.txt`
+- **Interactive mode**: `interactive_system_prompt.txt`
+
+Prompts use placeholders that are filled at runtime with object positions, dimensions, and scene information.
+
+## Control Flow
+
+### Batch Mode Workflow
+1. Load scene configuration from YAML
+2. Initialize PyBullet (GUI mode with direct window opening to avoid macOS shared memory hang)
+3. Load objects into simulation
+4. Stabilize robot and capture panorama
+5. **LLMValidator** generates initial plan using `planning_system_prompt.txt` with panorama as vision input
+6. **LLMValidator** critiques plan using `review_system_prompt.txt`
+7. If critique fails, refine plan using `refinement_system_prompt.txt` (up to `MAX_VALIDATION_ITERATIONS`)
+8. If validation succeeds, **LLMController** executes the validated plan sequentially
+9. Exit with status code 0 (success) or 1 (validation failure)
+
+### Interactive Mode Workflow
+1. Initialize PyBullet connection (direct GUI mode)
+2. Load simulation components and discover objects
+3. Launch Streamlit web interface
+4. User sends message via chat
+5. **InteractiveLLMController** calls Claude API with tool definitions
+6. Claude may use tools (get object positions, move gripper, capture panorama, etc.)
+7. Tool results fed back to Claude for final response
+8. Conversation history maintained in session state
+9. Token usage tracked and displayed in sidebar
+
+### Robot Movement Primitives
+
+From [src/robot_controller.py](src/robot_controller.py):
+- `move_to_target(position, threshold)`: Move end effector to target position using IK
+- `move_to_target_smooth(position, threshold)`: Smooth linear interpolated movement
+- `pick_up(object_name)`: Complete pick-up sequence (approach, grasp, lift)
+- `place(position)`: Place held object at absolute position
+- `place_on(object_name)`: Place held object on top of target object
+- `rotate_orientation_90()`: Rotate gripper 90 degrees (for stacking)
+- `reset_orientation()`: Reset gripper to default downward orientation
+- `open_gripper()` / `close_gripper()`: Gripper control
+
+## Platform-Specific Notes
+
+### macOS Compatibility
+- PyBullet shared memory connection can hang on macOS
+- Batch mode uses direct GUI connection (`mode='gui'`) instead of shared memory attempt
+- Debug visualizer configuration skipped in headless mode to avoid hangs
+- See [src/robot_controller.py](src/robot_controller.py):16-66 for initialization logic
+
+## Development Guidelines
+
+### Adding New Object Types
+1. Extend [src/object_manager.py](src/object_manager.py) `load_<type>()` method
+2. Update [src/scene_loader.py](src/scene_loader.py) to handle new type in validation
+3. Modify scene loading loop in [main.py](main.py):68-75 to load new type
+
+### Modifying LLM Behavior
+- **Batch mode**: Edit prompt files in [prompts/](prompts/) directory
+- **Interactive mode**: Edit `interactive_system_prompt.txt` or modify tool definitions in [src/interactive_llm_controller.py](src/interactive_llm_controller.py):81-87
+
+### Adjusting Movement Precision
+Threshold constants in [src/config.py](src/config.py):
+- `THRESHOLD_OVER_TARGET`: Reaching waypoints above objects (0.025m)
+- `THRESHOLD_CLOSE_TARGET`: Approaching objects (0.01m)
+- `THRESHOLD_PRECISE`: Final placement precision (0.001m)
+- `THRESHOLD_PRECISE_STRICT`: Strictest precision (0.0005m)
 
 ### Logging
-
-Logs are saved to `logs/` directory with timestamped filenames. The [src/logger.py](src/logger.py) provides:
-- `app_logger`: Application-level events (file handler)
-- `llm_logger`: LLM requests and responses (batch mode)
-- `robot_logger`: Robot operations and movements
-- `interactive_logger`: Interactive chat messages and tool calls (interactive mode)
-- Console output methods: `console_info()`, `console_progress()`, etc.
-
-Structured logging includes LLM requests/responses, robot operations, validation workflow, and interactive tool usage.
-
-### Panorama Images
-
-Captured panoramas are saved to `images/` with sequential numbering. Review these to understand what the LLM sees during plan generation.
-
-## Architecture Notes
-
-**Configuration-first design**: All parameters live in [src/config.py](src/config.py). Never hardcode values in implementation files.
-
-**Scene-based configuration**: Objects and tasks are defined in YAML files ([scenes/](scenes/)), separating data from code. The [src/scene_loader.py](src/scene_loader.py) module handles loading and validation.
-
-**State management**: [src/simulation_state.py](src/simulation_state.py) maintains simulation time and debug visualization state, passed through all movement operations.
-
-**Object registry**: [src/object_manager.py](src/object_manager.py) maintains a `name → PyBullet ID` mapping. Always use object names, not IDs, in high-level code.
-
-**Prompt-driven behavior**: The system's task execution is entirely driven by LLM interpretation of prompts. Changing prompts changes behavior without code modifications.
-
-**Multi-mode execution architecture**:
-- **Batch mode** ([main.py](main.py)): Single-task execution with validation pipeline using JSON action plans. Task loaded from scene YAML file. Runs PyBullet GUI on main thread.
-- **Interactive mode** ([main_interactive.py](main_interactive.py)): Conversational control using Claude's native tool calling API with 11 available tools. System prompt defined in [prompts/interactive_system_prompt.txt](prompts/interactive_system_prompt.txt). Connects to visual server or runs headless.
-- **Visual server mode** ([main_visual.py](main_visual.py)): Dedicated PyBullet GUI server process for macOS compatibility. Runs as `p.GUI_SERVER` and allows other processes to connect via `p.SHARED_MEMORY`.
-
-**macOS threading model**: macOS enforces that all AppKit/NSWindow operations occur on the main thread. Since Streamlit runs user code in background threads, PyBullet GUI cannot be created directly in [main_interactive.py](main_interactive.py). The solution is a dual-process architecture where [main_visual.py](main_visual.py) owns the main thread and GUI window, while [main_interactive.py](main_interactive.py) connects as a client. This architecture works on all platforms but is essential for macOS.
+- Application logs: [logs/](logs/) directory with timestamped session files
+- API call logs (interactive mode): `logs/api_calls_{session_name}.log` (if `LOG_API_CALLS=True`)
+- Console output controlled via `SimulationLogger` methods
