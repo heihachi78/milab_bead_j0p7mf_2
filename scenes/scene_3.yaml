@@ -1,0 +1,46 @@
+# Example Stacking Scene
+# This scene demonstrates a different arrangement and task
+
+metadata:
+  name: "Example Stacking Scene"
+  description: "Tower to two stacks"
+
+objects:
+  - name: "red_cube"
+    type: "cube"
+    position: [0.3, 0.3, 0.05]
+    color: [1, 0, 0, 1]  # RGBA
+    scale: 1.0
+
+  - name: "green_cube"
+    type: "cube"
+    position: [0.3, 0.35, 0.05]
+    color: [0, 1, 0, 1]  # RGBA
+    scale: 1.0
+
+  - name: "blue_cube"
+    type: "cube"
+    position: [0.3, 0.4, 0.05]
+    color: [0, 0, 1, 1]  # RGBA
+    scale: 1.0
+
+  - name: "yellow_cube"
+    type: "cube"
+    position: [0.3, 0.325, 0.1]
+    color: [1, 1, 0, 1]  # RGBA
+    scale: 1.0
+
+  - name: "pink_cube"
+    type: "cube"
+    position: [0.3, 0.375, 0.1]
+    color: [1, 0.5, 1, 1]  # RGBA
+    scale: 1.0
+
+  - name: "purple_cube"
+    type: "cube"
+    position: [0.3, 0.35, 0.15]
+    color: [0.5, 0, 0.5, 1]  # RGBA
+    scale: 1.0
+
+task:
+  description: "Build two stacks of cubes where one stack is (from bottom to top): green, yellow, purple and the other is in random order but the red must be at the top"

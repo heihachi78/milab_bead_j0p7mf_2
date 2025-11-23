@@ -104,6 +104,7 @@ logger.console_info("Capturing initial scene panorama...")
 camera_manager.capture_and_save_panorama("initial_stabilized")
 logger.console_info("Initial panorama captured")
 
+'''
 # Initialize LLM controller and validator
 logger.console_info("Initializing LLM systems...")
 llm_controller = LLMController(object_manager, robot_controller, logger)
@@ -195,11 +196,14 @@ logger.console_info(f"Plan contains {len(commands)} command(s)")
 llm_controller.execute_plan(validated_plan)
 
 '''
-robot_controller.pick_up('green_cube')
-robot_controller.place_on('blue_cube')
+robot_controller.reset_orientation()
+robot_controller.pick_up('purple_cube')
+robot_controller.rotate_orientation_90()
+robot_controller.place_on('yellow_cube')
+robot_controller.reset_orientation()
 robot_controller.pick_up('red_cube')
 robot_controller.place_on('green_cube')
-'''
+
 
 logger.log_app_simulation_end(simulation_state.t)
 logger.console_info("Simulation completed successfully")

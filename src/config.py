@@ -84,6 +84,10 @@ THRESHOLD_CLOSE_TARGET = 0.01
 THRESHOLD_PRECISE_STRICT = 0.0005
 THRESHOLD_PRECISE = 0.001
 
+# Orientation threshold (radians) - for checking orientation convergence
+# This is the maximum allowed angular difference in quaternion space
+ORIENTATION_THRESHOLD = 0.01  # approximately 0.57 degrees
+
 # Main loop parameters
 STABILIZATION_LOOP_STEPS = 2500
 

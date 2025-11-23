@@ -47,6 +47,9 @@ class RobotController:
         # Gripper state tracking
         self.current_gripper_pos = GRIPPER_CLOSED_POSITION
 
+        # Gripper orientation (default: pointing down)
+        self.orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
+
         # Configure gripper for better grip strength
         self._configure_gripper()
 
@@ -87,6 +90,35 @@ class RobotController:
         """
         ls = p.getLinkState(self.armId, self.endEffectorIndex)
         return list(ls[0])
+
+    def reset_orientation(self):
+        """
+        Reset gripper orientation to default down-pointing orientation.
+        Orientation: [roll=0.0, pitch=-π, yaw=0.0]
+        Rotates the gripper in place without moving the arm position.
+        """
+        self.orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
+        if self.logger:
+            self.logger.app_logger.info("Reset gripper orientation to default: [0.0, -π, 0.0]")
+
+        # Rotate in place by moving to current position with new orientation
+        current_pos = self.get_end_effector_position()
+        self.move_to_target_smooth(current_pos, THRESHOLD_PRECISE)
+
+    def rotate_orientation_90(self):
+        """
+        Set gripper orientation to 90 degrees rotated (around yaw axis).
+        Orientation: [roll=0.0, pitch=-π, yaw=-π/2]
+        This allows the gripper to approach objects from a perpendicular direction.
+        Rotates the gripper in place without moving the arm position.
+        """
+        self.orn = p.getQuaternionFromEuler([0.0, -math.pi, -math.pi / 2])
+        if self.logger:
+            self.logger.app_logger.info("Set gripper orientation to 90° rotated: [0.0, -π, -π/2]")
+
+        # Rotate in place by moving to current position with new orientation
+        current_pos = self.get_end_effector_position()
+        self.move_to_target_smooth(current_pos, THRESHOLD_PRECISE)
 
     def stabilize(self):
         """
@@ -228,11 +260,10 @@ class RobotController:
 
             if self.useSimulation and self.useRealTimeSimulation == 0:
                 p.stepSimulation()
-                orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
 
                 if self.useNullSpace == 1:
                     if self.useOrientation == 1:
-                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, pos, orn, self.ll, self.ul,
+                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, pos, self.orn, self.ll, self.ul,
                                                                   self.jr, self.rp)
                     else:
                         jointPoses = p.calculateInverseKinematics(self.armId,
@@ -247,7 +278,7 @@ class RobotController:
                         jointPoses = p.calculateInverseKinematics(self.armId,
                                                                   self.endEffectorIndex,
                                                                   pos,
-                                                                  orn,
+                                                                  self.orn,
                                                                   jointDamping=self.jd,
                                                                   solver=self.ikSolver,
                                                                   maxNumIterations=IK_MAX_ITERATIONS,
@@ -294,10 +325,24 @@ class RobotController:
             self.simulation_state.prevPose = pos
             self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
+
+            # Check position convergence
             distance = np.linalg.norm(np.array(pos) - np.array(ls[0]))
             distance_change = prev_distance - distance
+            position_converged = distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold
 
-            if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
+            # Check orientation convergence if orientation control is enabled
+            orientation_converged = True
+            if self.useOrientation == 1:
+                current_orn = ls[1]  # ls[1] is the orientation quaternion
+                # Calculate quaternion difference using dot product
+                # If quaternions are close, their dot product is close to 1 or -1
+                dot_product = abs(sum(a * b for a, b in zip(self.orn, current_orn)))
+                # Angular difference approximation: theta ≈ 2 * arccos(dot_product)
+                orientation_error = 2.0 * math.acos(min(1.0, dot_product))
+                orientation_converged = orientation_error < ORIENTATION_THRESHOLD
+
+            if position_converged and orientation_converged:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
                     self.logger.log_robot_operation_end("move_to_target", success=True)
@@ -367,11 +412,10 @@ class RobotController:
 
             if self.useSimulation and self.useRealTimeSimulation == 0:
                 p.stepSimulation()
-                orn = p.getQuaternionFromEuler([0.0, -math.pi, 0.0])
 
                 if self.useNullSpace == 1:
                     if self.useOrientation == 1:
-                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, next_pos_list, orn, self.ll, self.ul,
+                        jointPoses = p.calculateInverseKinematics(self.armId, self.endEffectorIndex, next_pos_list, self.orn, self.ll, self.ul,
                                                                   self.jr, self.rp)
                     else:
                         jointPoses = p.calculateInverseKinematics(self.armId,
@@ -386,7 +430,7 @@ class RobotController:
                         jointPoses = p.calculateInverseKinematics(self.armId,
                                                                   self.endEffectorIndex,
                                                                   next_pos_list,
-                                                                  orn,
+                                                                  self.orn,
                                                                   jointDamping=self.jd,
                                                                   solver=self.ikSolver,
                                                                   maxNumIterations=IK_MAX_ITERATIONS,
@@ -433,10 +477,24 @@ class RobotController:
             self.simulation_state.prevPose = next_pos_list
             self.simulation_state.prevPose1 = ls[0]
             self.simulation_state.hasPrevPose = 1
+
+            # Check position convergence
             distance = np.linalg.norm(target_pos - np.array(ls[0]))
             distance_change = prev_distance - distance
+            position_converged = distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold
 
-            if distance_change < DISTANCE_CHANGE_THRESHOLD and distance < threshold:
+            # Check orientation convergence if orientation control is enabled
+            orientation_converged = True
+            if self.useOrientation == 1:
+                current_orn = ls[1]  # ls[1] is the orientation quaternion
+                # Calculate quaternion difference using dot product
+                # If quaternions are close, their dot product is close to 1 or -1
+                dot_product = abs(sum(a * b for a, b in zip(self.orn, current_orn)))
+                # Angular difference approximation: theta ≈ 2 * arccos(dot_product)
+                orientation_error = 2.0 * math.acos(min(1.0, dot_product))
+                orientation_converged = orientation_error < ORIENTATION_THRESHOLD
+
+            if position_converged and orientation_converged:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
                     self.logger.log_robot_operation_end("move_to_target_smooth", success=True)
