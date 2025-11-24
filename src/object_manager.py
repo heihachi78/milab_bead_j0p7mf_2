@@ -11,6 +11,7 @@ class ObjectManager:
     def __init__(self, logger=None):
         """Initialize object manager with empty registry."""
         self.objects = {}
+        self.object_colors = {}  # Track colors for each object
         self.logger = logger
 
     def load_cube(self, name, position, color, scale=1.0):
@@ -29,6 +30,7 @@ class ObjectManager:
         obj_id = p.loadURDF("cube_small.urdf", basePosition=position, globalScaling=scale)
         p.changeVisualShape(obj_id, GRIPPER_LINK_INDEX, rgbaColor=color)
         self.objects[name] = obj_id
+        self.object_colors[name] = color  # Store color for later reference
         if self.logger:
             self.logger.log_app_object_loaded(name, position)
         return obj_id

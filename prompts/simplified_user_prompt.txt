@@ -1,0 +1,20 @@
+## Scene Information
+
+**Objects in Scene:**
+{objects_info}
+
+**Task Description:**
+{task_description}
+
+## Instructions
+
+Analyze the scene data above and generate a complete command sequence to accomplish the task. Remember to:
+
+1. Check object spacing on X and Y axes against gripper width (0.1m default, 0.05m rotated)
+2. Use `rotate_gripper_90()` when neighbors are within 0.05m on Y-axis in default orientation
+3. Unstack objects from top-down if they block access
+4. Use temporary placements with adequate clearance (>0.1m from other objects)
+5. Ensure all ground placements use z=0
+6. Follow logical sequence: pick_up before place
+
+Generate the JSON plan now.

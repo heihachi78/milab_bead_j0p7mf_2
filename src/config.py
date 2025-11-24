@@ -123,8 +123,9 @@ PANORAMA_FORMAT = 'JPEG'  # 'JPEG' or 'PNG' - JPEG uses less tokens for LLM API 
 PANORAMA_QUALITY = 75  # JPEG quality (1-100, higher = better quality but larger file)
 
 # LLM Validation settings
-MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles
+MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles (unused in simplified mode)
 VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
+SIMPLIFIED_MODE = True  # Enable simplified single-call workflow (no multi-stage validation)
 
 # Logging settings
 LOGS_FOLDER = 'logs'

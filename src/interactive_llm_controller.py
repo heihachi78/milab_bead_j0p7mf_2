@@ -75,18 +75,7 @@ class InteractiveLLMController:
 
     def _get_default_system_prompt(self) -> str:
         """Return default system prompt if file doesn't exist."""
-        return """You are a helpful robotics assistant controlling a Franka Panda robotic arm in a PyBullet simulation.
-
-You have access to various tools to query the scene state and control the robot. Use these tools to gather information and execute commands based on user requests.
-
-Key guidelines:
-- Always query object positions before attempting to manipulate them
-- Use the get_panorama tool when you need visual understanding of the scene
-- Be precise with coordinates and movements
-- Explain what you're doing as you use tools
-- If something fails, explain why and suggest alternatives
-
-Available objects in the scene can be queried using get_all_objects tool."""
+        return """You are a helpful robotics assistant controlling a Franka Panda robotic arm in a PyBullet simulation."""
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         """
