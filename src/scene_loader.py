@@ -8,7 +8,7 @@ that define objects and tasks for the PyBullet robotics simulation.
 import yaml
 from pathlib import Path
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 
 @dataclass
@@ -225,21 +225,3 @@ def list_available_scenes(scenes_folder: str = "scenes") -> List[str]:
 
     scene_files = scenes_path.glob("*.yaml")
     return sorted([f.stem for f in scene_files])
-
-
-def get_scene_info(scene_name: str, scenes_folder: str = "scenes") -> Optional[SceneMetadata]:
-    """
-    Get metadata for a scene without loading the full configuration.
-
-    Args:
-        scene_name: Name of the scene file (without .yaml extension)
-        scenes_folder: Path to the scenes folder
-
-    Returns:
-        SceneMetadata object or None if scene cannot be loaded
-    """
-    try:
-        scene = load_scene(scene_name, scenes_folder)
-        return scene.metadata
-    except SceneLoadError:
-        return None

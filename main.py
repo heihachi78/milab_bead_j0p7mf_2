@@ -5,7 +5,12 @@ import pybullet as p
 import os
 import glob
 import argparse
+from dotenv import load_dotenv
+from anthropic import Anthropic
 from src.config import *
+
+# Load environment variables from .env file
+load_dotenv()
 from src.simulation_state import SimulationState
 from src.object_manager import ObjectManager
 from src.robot_controller import RobotController
@@ -92,8 +97,17 @@ logger.console_info("Initial panorama captured")
 
 # Initialize LLM controller and validator
 logger.console_info("Initializing LLM systems...")
-llm_controller = LLMController(object_manager, robot_controller, logger)
-llm_validator = LLMValidator(object_manager, logger)
+
+# Create shared Anthropic client (used by both validator and controller)
+anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+if not anthropic_api_key:
+    logger.console_error("ANTHROPIC_API_KEY not found in environment variables")
+    raise ValueError("ANTHROPIC_API_KEY is required")
+
+anthropic_client = Anthropic(api_key=anthropic_api_key)
+
+llm_controller = LLMController(object_manager, robot_controller, logger, anthropic_client)
+llm_validator = LLMValidator(object_manager, logger, anthropic_client)
 logger.app_logger.info("LLM controller and validator initialized")
 
 # Main pick and place operations
@@ -108,7 +122,7 @@ logger.console_info("Finding latest panorama...")
 panorama_path = llm_controller._find_latest_panorama()
 logger.app_logger.info(f"Using panorama: {panorama_path}")
 
-# Generate and validate plan using LangChain workflow
+# Generate and validate plan using simplified workflow
 logger.console_info("Generating and validating execution plan...")
 validated_plan, is_valid, final_critique = llm_validator.get_validated_plan(task_description, panorama_path)
 
@@ -118,28 +132,26 @@ if not is_valid:
     logger.console_error("VALIDATION FAILED - NO VALID PLAN FOUND")
     logger.console_error("=" * 80)
     logger.console_error("")
-    logger.console_error("The LLM could not generate a valid plan after multiple attempts.")
+    logger.console_error("The LLM could not generate a valid plan.")
     logger.console_error("")
 
     if final_critique:
-        logger.console_error("Final critique from reviewer:")
-        logger.console_error(f"  {final_critique.get('critique', 'No critique available')}")
+        logger.console_error("Validation errors:")
+        errors = final_critique.get('errors', [])
+        if errors:
+            for error in errors:
+                logger.console_error(f"  - {error}")
+        elif 'error' in final_critique:
+            logger.console_error(f"  - {final_critique['error']}")
         logger.console_error("")
-
-        suggestions = final_critique.get('suggestions', [])
-        if suggestions:
-            logger.console_error("Suggestions for improvement:")
-            for i, suggestion in enumerate(suggestions, 1):
-                logger.console_error(f"  {i}. {suggestion}")
-            logger.console_error("")
 
     # Check if plan has no commands
     commands = validated_plan.get('commands', [])
     if not commands or len(commands) == 0:
         logger.console_error("The final plan contains NO COMMANDS (empty command list).")
-        logger.console_error("This usually means the validation loop could not find a suitable approach.")
+        logger.console_error("This usually means the LLM could not generate a valid command sequence.")
     else:
-        logger.console_error(f"The final plan has {len(commands)} command(s) but was rejected by the reviewer.")
+        logger.console_error(f"The final plan has {len(commands)} command(s) but failed validation checks.")
 
     logger.console_error("")
     logger.console_error("Possible reasons:")
@@ -178,7 +190,22 @@ if not commands or len(commands) == 0:
 # Execute the validated plan
 logger.console_info("Executing validated plan...")
 logger.console_info(f"Plan contains {len(commands)} command(s)")
-llm_controller.execute_plan(validated_plan)
+execution_result = llm_controller.execute_plan(validated_plan, task_description)
+
+# Check execution result
+if execution_result["status"] == "failed":
+    logger.console_error("=" * 80)
+    logger.console_error("EXECUTION FAILED")
+    logger.console_error("=" * 80)
+    logger.console_error(f"Reason: {execution_result['reason']}")
+    if "details" in execution_result:
+        logger.console_error(f"Details: {execution_result['details']}")
+    logger.console_error("=" * 80)
+else:
+    logger.console_success("=" * 80)
+    logger.console_success("EXECUTION COMPLETED SUCCESSFULLY")
+    logger.console_success(f"Completed {execution_result['steps_completed']} steps")
+    logger.console_success("=" * 80)
 
 '''
 robot_controller.pick_up('purple_cube')

@@ -145,7 +145,7 @@ class SimulationLogger:
             system_prompt: System prompt text
             user_prompt: User prompt text
             model: Model name
-            stage: Optional stage identifier (e.g., "VISION_ANALYSIS", "PLANNING", "REVIEW")
+            stage: Optional stage identifier (e.g., "SIMPLIFIED_PLANNING", "collision_check")
         """
         self.llm_logger.info("=" * 80)
         stage_info = f" | Stage: {stage}" if stage else ""
@@ -570,6 +570,41 @@ class SimulationLogger:
         self.api_call_logger.info(formatted_response)
         self.api_call_logger.info("=" * 80)
         self.api_call_logger.info("")  # Empty line for readability
+
+    def log_api_call(self, stage: str, request: Dict[str, Any], response: str, usage: Any):
+        """
+        Log a simple API call (for collision checking and replanning).
+
+        Args:
+            stage: Stage identifier (e.g., "collision_check", "collision_replan")
+            request: Request summary dict
+            response: Response text
+            usage: Usage object from API response
+        """
+        self.llm_logger.info("=" * 80)
+        self.llm_logger.info(f"API CALL | Stage: {stage}")
+
+        if hasattr(usage, 'input_tokens') and hasattr(usage, 'output_tokens'):
+            input_tokens = usage.input_tokens
+            output_tokens = usage.output_tokens
+            total_tokens = input_tokens + output_tokens
+            self.llm_logger.info(f"TOKEN USAGE | Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}")
+
+            # Log cache metrics if available
+            if hasattr(usage, 'cache_creation_input_tokens') and hasattr(usage, 'cache_read_input_tokens'):
+                cache_created = usage.cache_creation_input_tokens
+                cache_read = usage.cache_read_input_tokens
+                if cache_created > 0 or cache_read > 0:
+                    self.llm_logger.info(f"CACHE USAGE | Created: {cache_created} | Read: {cache_read}")
+
+        self.llm_logger.info("-" * 80)
+        self.llm_logger.info("REQUEST (summary):")
+        self.llm_logger.info(json.dumps(request, indent=2))
+        self.llm_logger.info("-" * 80)
+        self.llm_logger.info("RESPONSE:")
+        self.llm_logger.info(response)
+        self.llm_logger.info("=" * 80)
+        self.llm_logger.info("")  # Empty line for readability
 
     # ============== Helper Methods ==============
 

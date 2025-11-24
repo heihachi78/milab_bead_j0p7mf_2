@@ -122,10 +122,10 @@ IMAGES_FOLDER = 'images'
 PANORAMA_FORMAT = 'JPEG'  # 'JPEG' or 'PNG' - JPEG uses less tokens for LLM API calls
 PANORAMA_QUALITY = 75  # JPEG quality (1-100, higher = better quality but larger file)
 
-# LLM Validation settings
-MAX_VALIDATION_ITERATIONS = 3  # Maximum critique-refinement cycles (unused in simplified mode)
+# LLM Planning settings (simplified workflow)
+MAX_VALIDATION_ITERATIONS = 3  # DEPRECATED: Not used in simplified workflow (kept for compatibility)
 VALIDATION_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
-SIMPLIFIED_MODE = True  # Enable simplified single-call workflow (no multi-stage validation)
+SIMPLIFIED_MODE = True  # Always True: Uses simplified single-call workflow with local validation
 
 # Logging settings
 LOGS_FOLDER = 'logs'
@@ -142,3 +142,8 @@ INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System promp
 # Prompt caching settings (for interactive mode)
 ENABLE_PROMPT_CACHING = True  # Enable/disable prompt caching for system prompt and tools
 PROMPT_CACHE_TTL = None  # None = 5 minutes (default), "1h" = 1 hour (costs 2x for cache writes)
+
+# Collision prediction settings (new feature)
+ENABLE_COLLISION_PREDICTION = True  # Enable/disable collision prediction before executing each step
+COLLISION_CHECK_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
+COLLISION_CHECK_CACHE_TTL = 300  # Cache TTL for collision check prompts (seconds)

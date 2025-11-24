@@ -11,30 +11,35 @@ from . import config
 
 
 class LLMValidator:
-    """Anthropic-based validator for robot task plans with self-review and refinement."""
+    """Anthropic-based planner for robot tasks using simplified single-call workflow."""
 
-    def __init__(self, object_manager, logger=None):
+    def __init__(self, object_manager, logger=None, anthropic_client=None):
         """
-        Initialize the LLM validator.
+        Initialize the LLM planner with simplified workflow.
 
         Args:
             object_manager: ObjectManager instance for querying object positions
             logger: SimulationLogger instance for logging (optional)
+            anthropic_client: Anthropic API client instance (optional, will create if not provided)
         """
         self.object_manager = object_manager
         self.logger = logger
 
-        # Load environment variables
-        load_dotenv()
-        self.api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found in .env file")
+        # Use provided client or create new one
+        if anthropic_client:
+            self.client = anthropic_client
+        else:
+            # Load environment variables (fallback for standalone usage)
+            load_dotenv()
+            self.api_key = os.getenv('ANTHROPIC_API_KEY')
+            if not self.api_key:
+                raise ValueError("ANTHROPIC_API_KEY not found in environment or .env file")
+
+            # Initialize Anthropic client
+            self.client = anthropic.Anthropic(api_key=self.api_key)
 
         # Get model from config or environment
         self.model = config.VALIDATION_MODEL if hasattr(config, 'VALIDATION_MODEL') and config.VALIDATION_MODEL else os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-5-20250929')
-
-        # Initialize Anthropic client
-        self.client = anthropic.Anthropic(api_key=self.api_key)
         self.max_tokens = 2048
 
         # Load simplified prompt templates
@@ -48,12 +53,20 @@ class LLMValidator:
             return f.read().strip()
 
     def _encode_image(self, image_path: str) -> str:
-        """Encode image to base64."""
+        """
+        Encode image to base64.
+
+        Note: Currently unused in simplified workflow but kept for potential future use.
+        """
         with open(image_path, 'rb') as f:
             return base64.standard_b64encode(f.read()).decode('utf-8')
 
     def _get_image_media_type(self, image_path: str) -> str:
-        """Determine media type based on file extension."""
+        """
+        Determine media type based on file extension.
+
+        Note: Currently unused in simplified workflow but kept for potential future use.
+        """
         extension = Path(image_path).suffix.lower()
         if extension in ['.jpg', '.jpeg']:
             return 'image/jpeg'
@@ -294,19 +307,24 @@ class LLMValidator:
         """
         Generate and validate a plan using simplified single-call workflow.
 
-        This method generates a plan from scene data using a single LLM call with
-        comprehensive system prompt containing examples, then validates it locally.
+        The simplified workflow:
+        1. Makes a single LLM call with comprehensive system prompt containing examples
+        2. Receives plan with reasoning and commands from the LLM
+        3. Performs local Python validation checks (structure, logic, constraints)
+
+        This replaces the old multi-stage workflow (vision analysis, spatial analysis,
+        planning, review, refinement) with a simpler, faster single-call approach.
 
         Args:
             task_description: The task to accomplish
-            panorama_path: Path to panorama image (optional, kept for compatibility, still captured for debugging)
-            max_iterations: Maximum iterations (unused in simplified mode, kept for compatibility)
+            panorama_path: Path to panorama image (unused in simplified workflow, kept for API compatibility)
+            max_iterations: Maximum iterations (unused in simplified workflow, kept for API compatibility)
 
         Returns:
             Tuple of (plan, is_valid, validation_errors_dict)
-            - plan: Plan dictionary with reasoning and commands
+            - plan: Plan dictionary with 'reasoning' and 'commands' fields
             - is_valid: Boolean indicating if plan passed local validation
-            - validation_errors_dict: Dictionary with errors if validation failed, None if valid
+            - validation_errors_dict: Dictionary with validation errors if invalid, None if valid
         """
         if self.logger:
             self.logger.console_info("Simplified workflow: Generating plan from scene data...")
