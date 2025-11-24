@@ -3,26 +3,26 @@
 
 metadata:
   name: "Example Stacking Scene"
-  description: "Three cubes arranged in a line for simple stacking"
+  description: "Three cubes but its harder"
 
 objects:
   - name: "red_cube"
     type: "cube"
-    position: [0.35, 0.35, 0.05]
+    position: [0.4, 0.4, 0.05]
     color: [1, 0, 0, 1]  # RGBA
     scale: 1.0
 
   - name: "green_cube"
     type: "cube"
-    position: [0.4, 0.4, 0.05]
+    position: [0.45, 0.45, 0.05]
     color: [0, 1, 0, 1]  # RGBA
     scale: 1.0
 
-  - name: "yellow_cube"
+  - name: "blue_cube"
     type: "cube"
-    position: [0.45, 0.45, 0.05]
-    color: [1, 1, 0, 1]  # RGBA
+    position: [0.4, 0.45, 0.05]
+    color: [0, 0, 1, 1]  # RGBA
     scale: 1.0
 
 task:
-  description: "Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, yellow cube"
+  description: "Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, blue cube"
