@@ -200,7 +200,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "rotate_gripper_90",
-                "description": "Rotate the gripper 90 degrees around the yaw axis. This changes the gripper orientation to approach objects from a perpendicular direction while maintaining the current position.",
+                "description": "Use this function to rotate the gripper 90 degrees around the Z axis to avoid hitting nearby object with the wide part of the gripper.",
                 "input_schema": {
                     "type": "object",
                     "properties": {},
@@ -209,7 +209,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "reset_gripper_orientation",
-                "description": "Reset the gripper orientation to the default down-pointing position. This restores the standard orientation while maintaining the current position.",
+                "description": "Use this function to rotate the gripper around the Z axis back to the original position. This helps to avoid hitting nearby object with the wide part of the gripper.",
                 "input_schema": {
                     "type": "object",
                     "properties": {},
