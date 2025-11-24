@@ -218,7 +218,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "pick_up_object",
-                "description": "High-level operation to pick up a specified object. This handles the complete pick sequence: approach, open gripper, grasp, and lift.",
+                "description": "Pick up an object from above (approach, open gripper, grasp, lift). Does NOT avoid obstacles - target must be clear from above.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -232,21 +232,21 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "place_object",
-                "description": "High-level operation to place the currently grasped object at a specific absolute position. This handles the complete place sequence: approach, descend, release, and retract. Use this when you want to place an object at specific coordinates rather than on top of another object.",
+                "description": "Place the held object at specific coordinates (approach, descend, release, retract). Does NOT avoid obstacles.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "x": {
                             "type": "number",
-                            "description": "X coordinate in meters where to place the object"
+                            "description": "X coordinate in meters"
                         },
                         "y": {
                             "type": "number",
-                            "description": "Y coordinate in meters where to place the object"
+                            "description": "Y coordinate in meters"
                         },
                         "z": {
                             "type": "number",
-                            "description": "Z coordinate in meters where to place the object (ground level is approximately 0.0)"
+                            "description": "Z coordinate in meters (ground level ≈ 0.0)"
                         }
                     },
                     "required": ["x", "y", "z"]
@@ -254,7 +254,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "place_on_object",
-                "description": "High-level operation to place the currently grasped object on top of another object. This handles the complete place sequence: approach, descend, release, and retract.",
+                "description": "Place the held object on top of another object (approach, descend, release, retract). Does NOT avoid obstacles.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
