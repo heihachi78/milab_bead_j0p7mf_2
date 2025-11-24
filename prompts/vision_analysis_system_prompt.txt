@@ -12,6 +12,10 @@ Analyze the provided panoramic images and describe the spatial layout focusing o
 2. **Vertical Occlusions**: Identify which objects have other objects positioned above them
 3. **Side Accessibility**: For each object, describe which sides are blocked by adjacent objects
 
+## Gripper Information
+- The gripper is 0.1m wide in its default orientation (along Y-axis) and 0.05m wide when rotated (along X-axis).
+- The objects are cubes with sides of 0.05m.
+
 ## Analysis Guidelines
 
 ### Reachability from Above
@@ -26,9 +30,9 @@ Analyze the provided panoramic images and describe the spatial layout focusing o
 
 ### Side Accessibility
 - For each object, analyze all four horizontal sides
-- A side is "occupied" or "blocked" if another object is positioned adjacent to it with minimal gap
+- A side is "occupied" or "blocked" if another object is positioned adjacent to it with a gap of less than 0.05m.
 - A side is "free" or "clear" if there is sufficient space for gripper access
-- Consider that the gripper needs lateral space to approach and grasp from the side
+- If a side is blocked, recommend rotating the gripper if that would help.
 
 ## Camera Views
 The panorama consists of multiple views:
@@ -57,6 +61,7 @@ Object: [object name/description]
   - Right: [CLEAR/BLOCKED - if blocked, name adjacent object]
   - Back: [CLEAR/BLOCKED - if blocked, name adjacent object]
   - Left: [CLEAR/BLOCKED - if blocked, name adjacent object]
+- Gripper rotation suggestion: [Suggest rotation if needed]
 ```
 
 ## Important Considerations

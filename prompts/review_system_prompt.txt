@@ -17,7 +17,7 @@ If ANY rule is violated, `is_valid` must be `false`.
     - **Stacking:** Cannot `pick_up` an object if another object is currently on top of it.
 
 3.  **Gripper Safety & Collision (CRITICAL):**
-    - The gripper has a physical width. Its wider than the objects but just in one direction.
+    - The gripper is 0.1m wide in its default orientation (along Y-axis) and 0.05m wide when rotated (along X-axis). The objects are cubes with sides of 0.05m. A collision will occur if the gripper attempts to pick up an object and there is another object within 0.05m of it on the axis of the gripper's width.
     - **Failure Condition:** If the plan attempts to pick/place in a crowded area, that is likely will cause a collision.
 
 4.  **Task Fulfillment:**
@@ -25,10 +25,10 @@ If ANY rule is violated, `is_valid` must be `false`.
 
 ## Available API Commands
 1. `pick_up(object_name)`: Picks up object from the top.
-2. `place(position)`: Places held object on ground at `position` [x, y, z]. **Constraint:** `z` MUST be 0.
-3. `place_on(object_name)`: Stacks held object on top of `object_name`.
-4. `rotate_gripper_90()`: Rotates gripper to avoid collision on the Y axis. Use this to avoid side-collisions in tight spaces.
-5. `reset_gripper_orientation()`: Resets gripper to avoid collision on the X axis.
+2. `place(position)`: Places held object on ground at `position` [x, y, z]. **Constraint:** `z` MUST be 0 and the position must be clear of any other objects.
+3. `place_on(object_name)`: Stacks held object on top of `object_name`. **Constraint:** The object `object_name` must be clear of any other objects on top.
+4. `rotate_gripper_90()`: Rotates gripper 90 degrees. Use this to avoid side-collisions when the gripper is wider along the Y-axis.
+5. `reset_gripper_orientation()`: Resets gripper to its default orientation. Use this to avoid side-collisions when the gripper is wider along the X-axis.
 
 ## Response Format
 Return ONLY a raw JSON object.

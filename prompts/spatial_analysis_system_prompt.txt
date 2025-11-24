@@ -16,6 +16,10 @@ Combine these inputs to produce a detailed spatial analysis that identifies:
 - What specific objects must be moved to unblock currently inaccessible objects
 - Which objects have sides too close to other objects for safe gripper approach
 
+## Gripper Information
+- The gripper is 0.1m wide in its default orientation (along Y-axis) and 0.05m wide when rotated (along X-axis).
+- The objects are cubes with sides of 0.05m.
+
 ## Analysis Guidelines
 
 ### Reachability Assessment
@@ -31,8 +35,7 @@ For each blocked object, explicitly state:
 
 ### Spatial Proximity
 - Use the position coordinates to verify visual observations
-- Calculate distances between objects to assess gripper clearance
-- Consider that a parallel-jaw gripper needs ~5-8cm clearance to approach and grasp
+- Calculate distances between objects to assess gripper clearance. A collision will occur if the gripper attempts to pick up an object and there is another object within 0.05m of it on the axis of the gripper's width.
 - Identify clusters of tightly-packed objects
 
 ### Manipulation Sequencing Hints
@@ -72,7 +75,7 @@ For objects reachable from above but with side constraints:
 ```
 - [Object name]:
   - Close neighbors: [List adjacent objects and which sides they block]
-  - Gripper approach: [Recommend top-down vs. side grasp]
+  - Gripper approach: [Recommend gripper rotation if needed]
 ```
 
 ### Section 4: Manipulation Sequence Recommendations
