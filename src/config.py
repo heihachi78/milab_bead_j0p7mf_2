@@ -54,7 +54,7 @@ TRAIL_DURATION = 15
 DEFAULT_SCENE = "default"  # Default scene to load if not specified via CLI
 
 # Movement parameters
-MAX_ITERATIONS = 10000
+MAX_ITERATIONS = 2500
 DISTANCE_CHANGE_THRESHOLD = 0.0001
 LINEAR_MOVEMENT_SPEED = 0.1  # meters per second for smooth straight-line movement (matches ex.py: t/10 with TIME_STEP=0.01)
 

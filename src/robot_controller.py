@@ -161,7 +161,7 @@ class RobotController:
         # Use move_to_target (not smooth) with a looser threshold to allow the robot
         # to adjust its joint configuration for the new orientation
         current_pos = self.get_end_effector_position()
-        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)  # Ignore success for orientation change
 
     def rotate_orientation_90(self):
         """
@@ -178,7 +178,7 @@ class RobotController:
         # Use move_to_target (not smooth) with a looser threshold to allow the robot
         # to adjust its joint configuration for the new orientation
         current_pos = self.get_end_effector_position()
-        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)
+        self.move_to_target(current_pos, THRESHOLD_CLOSE_TARGET)  # Ignore success for orientation change
 
     def stabilize(self):
         """
@@ -406,14 +406,14 @@ class RobotController:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
                     self.logger.log_robot_operation_end("move_to_target", success=True)
-                return ls[0]
+                return ls[0], True
 
             prev_distance = distance
 
         if self.logger:
             self.logger.log_robot_convergence(s, distance)
-            self.logger.log_robot_operation_end("move_to_target", success=True)
-        return ls[0]
+            self.logger.log_robot_operation_end("move_to_target", success=False)
+        return ls[0], False
 
     def move_to_target_smooth(self, pos, threshold):
         """
@@ -440,7 +440,7 @@ class RobotController:
         # Calculate total distance
         total_distance = np.linalg.norm(target_pos - start_pos)
         if total_distance < 0.0001:
-            return ls[0]
+            return ls[0], True  # Already at target
 
         prev_distance = 9999.9999
         s = 0
@@ -558,14 +558,14 @@ class RobotController:
                 if self.logger:
                     self.logger.log_robot_convergence(s, distance)
                     self.logger.log_robot_operation_end("move_to_target_smooth", success=True)
-                return ls[0]
+                return ls[0], True
 
             prev_distance = distance
 
         if self.logger:
             self.logger.log_robot_convergence(s, distance)
-            self.logger.log_robot_operation_end("move_to_target_smooth", success=True)
-        return ls[0]
+            self.logger.log_robot_operation_end("move_to_target_smooth", success=False)
+        return ls[0], False
 
     def pick_up(self, target_object):
         """
@@ -576,7 +576,7 @@ class RobotController:
             target_object: Name of the object to pick up (e.g., 'blue_cube')
 
         Returns:
-            gripper_pos: Final gripper position
+            bool: True if successful, False if any movement failed to converge
         """
         over_target_pos = self.object_manager.get_object_center_position(target_object)
 
@@ -589,24 +589,48 @@ class RobotController:
         target_pos = self.object_manager.get_object_center_position(target_object)
         target_pos[2] += PICK_TARGET_OFFSET
 
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("pick_up", success=False)
+            return False
 
-        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        _, success = self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("pick_up", success=False)
+            return False
+
         self.open_gripper()
-        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+
+        _, success = self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("pick_up", success=False)
+            return False
+
         self.close_gripper()
-        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
+
+        _, success = self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("pick_up", success=False)
+            return False
 
         # Capture panorama after pick up operation
         if self.camera_manager is not None:
             self.camera_manager.capture_and_save_panorama(f"pickup_{target_object}")
 
-        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("pick_up", success=False)
+            return False
 
         if self.logger:
             self.logger.log_robot_operation_end("pick_up", success=True)
 
-        return gripper_pos
+        return True
 
     def place(self, place_position):
         """
@@ -617,7 +641,7 @@ class RobotController:
             place_position: Target position [x, y, z] where the object should be placed
 
         Returns:
-            gripper_pos: Final gripper position
+            bool: True if successful, False if any movement failed to converge
         """
         if self.logger:
             self.logger.log_robot_operation_start("place", position=place_position)
@@ -630,12 +654,38 @@ class RobotController:
         target_pos = place_position.copy()
         target_pos[2] += PLACE_TARGET_OFFSET
 
-        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
-        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
+
+        _, success = self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
+
+        _, success = self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
+
         self.open_gripper()
-        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
-        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+
+        _, success = self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
+
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
+
         self.close_gripper()
 
         # Capture panorama after place operation
@@ -643,12 +693,16 @@ class RobotController:
             place_str = f"place_{place_position[0]:.2f}_{place_position[1]:.2f}_{place_position[2]:.2f}"
             self.camera_manager.capture_and_save_panorama(place_str)
 
-        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place", success=False)
+            return False
 
         if self.logger:
             self.logger.log_robot_operation_end("place", success=True)
 
-        return gripper_pos
+        return True
 
     def place_on(self, target_object):
         """
@@ -658,7 +712,7 @@ class RobotController:
             target_object: The object to place the held object on.
 
         Returns:
-            gripper_pos: Final gripper position
+            bool: True if successful, False if any movement failed to converge
         """
         over_target_pos = self.object_manager.get_object_center_position(target_object)
 
@@ -672,21 +726,51 @@ class RobotController:
         target_pos = self.object_manager.get_object_center_position(target_object)
         target_pos[2] += PLACE_ON_TARGET_OFFSET
 
-        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
-        self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
-        self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
+
+        _, success = self.move_to_target(close_target_pos, THRESHOLD_CLOSE_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
+
+        _, success = self.move_to_target_smooth(target_pos, THRESHOLD_PRECISE_STRICT)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
+
         self.open_gripper()
-        self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
-        self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+
+        _, success = self.move_to_target_smooth(close_target_pos, THRESHOLD_PRECISE)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
+
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
+
         self.close_gripper()
 
         # Capture panorama after place on operation
         if self.camera_manager is not None:
             self.camera_manager.capture_and_save_panorama(f"place_on_{target_object}")
 
-        gripper_pos = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        _, success = self.move_to_target(over_target_pos, THRESHOLD_OVER_TARGET)
+        if not success:
+            if self.logger:
+                self.logger.log_robot_operation_end("place_on", success=False)
+            return False
 
         if self.logger:
             self.logger.log_robot_operation_end("place_on", success=True)
 
-        return gripper_pos
+        return True

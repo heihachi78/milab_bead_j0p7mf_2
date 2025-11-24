@@ -93,7 +93,11 @@ class LLMController:
 
                 if self.logger:
                     self.logger.console_progress(f"Executing command {i+1}/{len(commands)}: pick_up({object_name})")
-                self.robot_controller.pick_up(object_name)
+                success = self.robot_controller.pick_up(object_name)
+                if not success:
+                    if self.logger:
+                        self.logger.app_logger.error(f"Command {i+1}: pick_up({object_name}) failed - convergence timeout")
+                    return {"status": "failed", "step": i+1, "action": action, "reason": "convergence_failed"}
 
             elif action == 'place':
                 position = command.get('position')
@@ -102,7 +106,11 @@ class LLMController:
 
                 if self.logger:
                     self.logger.console_progress(f"Executing command {i+1}/{len(commands)}: place({position})")
-                self.robot_controller.place(position)
+                success = self.robot_controller.place(position)
+                if not success:
+                    if self.logger:
+                        self.logger.app_logger.error(f"Command {i+1}: place({position}) failed - convergence timeout")
+                    return {"status": "failed", "step": i+1, "action": action, "reason": "convergence_failed"}
 
             elif action == 'place_on':
                 object_name = command.get('object')
@@ -111,7 +119,11 @@ class LLMController:
 
                 if self.logger:
                     self.logger.console_progress(f"Executing command {i+1}/{len(commands)}: place_on({object_name})")
-                self.robot_controller.place_on(object_name)
+                success = self.robot_controller.place_on(object_name)
+                if not success:
+                    if self.logger:
+                        self.logger.app_logger.error(f"Command {i+1}: place_on({object_name}) failed - convergence timeout")
+                    return {"status": "failed", "step": i+1, "action": action, "reason": "convergence_failed"}
 
             elif action == 'rotate_gripper_90':
                 if self.logger:

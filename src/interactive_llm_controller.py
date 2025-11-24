@@ -378,23 +378,23 @@ class InteractiveLLMController:
         elif tool_name == "move_gripper":
             position = [tool_input["x"], tool_input["y"], tool_input["z"]]
             threshold = config.THRESHOLD_CLOSE_TARGET if hasattr(config, 'THRESHOLD_CLOSE_TARGET') else 0.01
-            final_pos = self.robot_controller.move_to_target(position, threshold)
+            final_pos, success = self.robot_controller.move_to_target(position, threshold)
             return {
-                "success": True,
+                "success": success,
                 "target_position": position,
                 "final_position": list(final_pos),
-                "message": f"Moved gripper to [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]"
+                "message": f"Moved gripper to [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]" if success else f"Failed to reach position - convergence timeout"
             }
 
         elif tool_name == "move_gripper_smooth":
             position = [tool_input["x"], tool_input["y"], tool_input["z"]]
             threshold = config.THRESHOLD_PRECISE if hasattr(config, 'THRESHOLD_PRECISE') else 0.001
-            final_pos = self.robot_controller.move_to_target_smooth(position, threshold)
+            final_pos, success = self.robot_controller.move_to_target_smooth(position, threshold)
             return {
-                "success": True,
+                "success": success,
                 "target_position": position,
                 "final_position": list(final_pos),
-                "message": f"Smoothly moved gripper to [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]"
+                "message": f"Smoothly moved gripper to [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]" if success else f"Failed to reach position - convergence timeout"
             }
 
         elif tool_name == "open_gripper":
@@ -427,32 +427,29 @@ class InteractiveLLMController:
 
         elif tool_name == "pick_up_object":
             object_name = tool_input["object_name"]
-            final_pos = self.robot_controller.pick_up(object_name)
+            success = self.robot_controller.pick_up(object_name)
             return {
-                "success": True,
+                "success": success,
                 "object": object_name,
-                "final_position": list(final_pos),
-                "message": f"Successfully picked up {object_name}"
+                "message": f"Successfully picked up {object_name}" if success else f"Failed to pick up {object_name} - convergence timeout"
             }
 
         elif tool_name == "place_object":
             position = [tool_input["x"], tool_input["y"], tool_input["z"]]
-            final_pos = self.robot_controller.place(position)
+            success = self.robot_controller.place(position)
             return {
-                "success": True,
+                "success": success,
                 "position": position,
-                "final_position": list(final_pos),
-                "message": f"Successfully placed object at [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]"
+                "message": f"Successfully placed object at [{position[0]:.4f}, {position[1]:.4f}, {position[2]:.4f}]" if success else f"Failed to place object - convergence timeout"
             }
 
         elif tool_name == "place_on_object":
             target_object = tool_input["target_object"]
-            final_pos = self.robot_controller.place_on(target_object)
+            success = self.robot_controller.place_on(target_object)
             return {
-                "success": True,
+                "success": success,
                 "target_object": target_object,
-                "final_position": list(final_pos),
-                "message": f"Successfully placed object on {target_object}"
+                "message": f"Successfully placed object on {target_object}" if success else f"Failed to place object on {target_object} - convergence timeout"
             }
 
         else:
