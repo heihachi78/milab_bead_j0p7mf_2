@@ -18,6 +18,14 @@ from io import BytesIO
 from PIL import Image
 from datetime import datetime
 
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.markdown import Markdown
+from rich.rule import Rule
+from rich.status import Status
+from rich.text import Text
+
 from src.config import *
 from src.simulation_state import SimulationState
 from src.object_manager import ObjectManager
@@ -26,6 +34,9 @@ from src.camera_manager import CameraManager
 from src.interactive_llm_controller import InteractiveLLMController
 from src.logger import SimulationLogger
 from src.scene_loader import load_scene
+
+# Initialize Rich console
+console = Console()
 
 
 class ConsoleSession:
@@ -39,81 +50,111 @@ class ConsoleSession:
         self.verbose = False  # Show tool details
 
 
-def print_separator(char="=", length=70):
-    """Print a separator line."""
-    print(char * length)
-
-
 def print_welcome():
     """Print welcome message and instructions."""
-    print_separator("=")
-    print("🤖 ROBOT CONTROL CONSOLE".center(70))
-    print_separator("=")
-    print("\nInteract with the Franka Panda robot using natural language commands.")
-    print("Type '/help' for available commands, '/quit' to exit.\n")
-    print_separator("-")
+    welcome_text = Text()
+    welcome_text.append("🤖 ROBOT CONTROL CONSOLE\n\n", style="bold cyan")
+    welcome_text.append("Interact with the Franka Panda robot using natural language commands.\n", style="white")
+    welcome_text.append("Type ", style="dim")
+    welcome_text.append("/help", style="bold yellow")
+    welcome_text.append(" for available commands, ", style="dim")
+    welcome_text.append("/quit", style="bold yellow")
+    welcome_text.append(" to exit.", style="dim")
+
+    console.print(Panel(welcome_text, border_style="cyan", padding=(1, 2)))
+    console.print()
 
 
 def print_help():
     """Print help information."""
-    print("\n" + "="*70)
-    print("AVAILABLE COMMANDS".center(70))
-    print("="*70)
-    print("\nSpecial Commands:")
-    print("  /help      - Show this help message")
-    print("  /status    - Display scene info, objects, gripper state, tokens")
-    print("  /quit      - Exit the console")
-    print("  /clear     - Clear conversation history")
-    print("  /verbose   - Toggle verbose mode (show tool details)")
-    print("\nExample Robot Commands:")
-    print("  - What objects are in the scene?")
-    print("  - Pick up the blue cube")
-    print("  - Show me the scene")
-    print("  - Move the gripper to [0.3, 0.4, 0.2]")
-    print("  - Stack the red cube on the blue cube")
-    print("  - Where is the green cube?")
-    print("="*70 + "\n")
+    console.print()
+
+    # Special commands table
+    special_table = Table(title="Special Commands", border_style="yellow", show_header=True, header_style="bold yellow")
+    special_table.add_column("Command", style="cyan", width=15)
+    special_table.add_column("Description", style="white")
+
+    special_table.add_row("/help", "Show this help message")
+    special_table.add_row("/status", "Display scene info, objects, gripper state, tokens")
+    special_table.add_row("/quit", "Exit the console")
+    special_table.add_row("/clear", "Clear conversation history")
+    special_table.add_row("/verbose", "Toggle verbose mode (show tool details)")
+
+    console.print(special_table)
+    console.print()
+
+    # Example commands panel
+    examples = Text()
+    examples.append("Example Robot Commands:\n\n", style="bold green")
+    examples.append("• What objects are in the scene?\n", style="white")
+    examples.append("• Pick up the blue cube\n", style="white")
+    examples.append("• Show me the scene\n", style="white")
+    examples.append("• Move the gripper to [0.3, 0.4, 0.2]\n", style="white")
+    examples.append("• Stack the red cube on the blue cube\n", style="white")
+    examples.append("• Where is the green cube?", style="white")
+
+    console.print(Panel(examples, border_style="green", padding=(1, 2)))
+    console.print()
 
 
 def print_status(session, object_manager, robot_controller):
     """Print current scene status."""
-    print("\n" + "="*70)
-    print("SCENE STATUS".center(70))
-    print("="*70)
+    console.print()
 
-    # Objects
-    print("\nObjects in Scene:")
+    # Objects table
+    objects_table = Table(title="Objects in Scene", border_style="blue", show_header=True, header_style="bold blue")
+    objects_table.add_column("Object Name", style="cyan")
+    objects_table.add_column("Position [x, y, z]", style="white", justify="right")
+
     try:
         for obj_name in object_manager.objects.keys():
             try:
                 pos = object_manager.get_object_center_position(obj_name)
-                print(f"  - {obj_name}: [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]")
+                objects_table.add_row(obj_name, f"[{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]")
             except Exception as e:
-                print(f"  - {obj_name}: Error getting position ({e})")
+                objects_table.add_row(obj_name, f"[red]Error: {e}[/red]")
     except Exception as e:
-        print(f"  Error displaying objects: {e}")
+        console.print(f"[red]Error displaying objects: {e}[/red]")
 
-    # Gripper state
-    print("\nGripper State:")
+    console.print(objects_table)
+    console.print()
+
+    # Gripper state panel
     try:
         gripper_pos = robot_controller.get_end_effector_position()
         gripper_state = "Open" if robot_controller.current_gripper_pos > 0.02 else "Closed"
-        print(f"  Position: [{gripper_pos[0]:.3f}, {gripper_pos[1]:.3f}, {gripper_pos[2]:.3f}]")
-        print(f"  State: {gripper_state}")
-    except Exception as e:
-        print(f"  Error displaying gripper state: {e}")
+        gripper_emoji = "🟢" if robot_controller.current_gripper_pos > 0.02 else "🔴"
 
-    # Token usage
-    print("\nToken Usage:")
+        gripper_info = Text()
+        gripper_info.append(f"{gripper_emoji} State: ", style="bold")
+        gripper_info.append(f"{gripper_state}\n", style="green" if gripper_state == "Open" else "red")
+        gripper_info.append("Position: ", style="bold")
+        gripper_info.append(f"[{gripper_pos[0]:.3f}, {gripper_pos[1]:.3f}, {gripper_pos[2]:.3f}]", style="white")
+
+        console.print(Panel(gripper_info, title="Gripper State", border_style="magenta", padding=(1, 2)))
+    except Exception as e:
+        console.print(f"[red]Error displaying gripper state: {e}[/red]")
+
+    console.print()
+
+    # Token usage table
+    token_table = Table(border_style="yellow", show_header=True, header_style="bold yellow")
+    token_table.add_column("Type", style="cyan")
+    token_table.add_column("Tokens", justify="right", style="white")
+
     total_tokens = session.total_input_tokens + session.total_output_tokens
-    print(f"  Input:  {session.total_input_tokens:,} tokens")
-    print(f"  Output: {session.total_output_tokens:,} tokens")
-    print(f"  Total:  {total_tokens:,} tokens")
+    token_table.add_row("Input", f"{session.total_input_tokens:,}")
+    token_table.add_row("Output", f"{session.total_output_tokens:,}")
+    token_table.add_row("Total", f"{total_tokens:,}", style="bold green")
+
+    console.print(token_table)
+    console.print()
 
     # Verbose mode
-    print(f"\nVerbose Mode: {'ON' if session.verbose else 'OFF'}")
-
-    print("="*70 + "\n")
+    verbose_status = "🔊 ON" if session.verbose else "🔇 OFF"
+    verbose_color = "green" if session.verbose else "dim"
+    console.print(f"Verbose Mode: [{verbose_color}]{verbose_status}[/{verbose_color}]")
+    console.print()
 
 
 def display_tool_results(tool_results, verbose=False):
@@ -121,19 +162,32 @@ def display_tool_results(tool_results, verbose=False):
     if not tool_results:
         return
 
-    print("\n  [Tools Used]")
-    for i, tool_result in enumerate(tool_results, 1):
-        tool_name = tool_result["tool_name"]
-        tool_input = tool_result["tool_input"]
-        result = tool_result["result"]
+    if verbose:
+        # Detailed view with table
+        tools_table = Table(title="🔧 Tools Used", border_style="yellow", show_header=True, header_style="bold yellow")
+        tools_table.add_column("#", style="dim", width=3)
+        tools_table.add_column("Tool", style="cyan")
+        tools_table.add_column("Input", style="white")
+        tools_table.add_column("Result", style="green")
 
-        if verbose:
-            print(f"\n  Tool {i}: {tool_name}")
-            print(f"    Input: {tool_input}")
-            print(f"    Result: {result}")
-        else:
-            # Compact display
-            print(f"    {i}. {tool_name}")
+        for i, tool_result in enumerate(tool_results, 1):
+            tool_name = tool_result["tool_name"]
+            tool_input = str(tool_result["tool_input"])
+            result = str(tool_result["result"])
+
+            # Truncate long results
+            if len(result) > 50:
+                result = result[:50] + "..."
+
+            tools_table.add_row(str(i), tool_name, tool_input, result)
+
+        console.print(tools_table)
+    else:
+        # Compact view
+        tool_names = [f"{i}. {tr['tool_name']}" for i, tr in enumerate(tool_results, 1)]
+        tools_text = Text("🔧 Tools: ", style="dim yellow")
+        tools_text.append(" • ".join(tool_names), style="dim cyan")
+        console.print(tools_text)
 
 
 def save_panorama(panorama_base64, session_name="console"):
@@ -157,7 +211,7 @@ def save_panorama(panorama_base64, session_name="console"):
         panorama_img.save(filepath)
         return filepath
     except Exception as e:
-        print(f"  [Error saving panorama: {e}]")
+        console.print(f"[red]Error saving panorama: {e}[/red]")
         return None
 
 
@@ -172,7 +226,7 @@ def get_input_with_simulation():
     Returns:
         str: User input string, or raises EOFError if interrupted
     """
-    print("\nYou: ", end="", flush=True)
+    console.print("\n[bold blue]You:[/bold blue] ", end="")
 
     while True:
         # Check if input is available (non-blocking)
@@ -195,22 +249,21 @@ def get_input_with_simulation():
 
 def initialize_simulation(scene_name, logger):
     """Initialize PyBullet simulation and all components."""
-    logger.console_info(f"Initializing console simulation with scene: {scene_name}...")
+    with console.status(f"[cyan]Initializing console simulation with scene: {scene_name}...", spinner="dots"):
+        # Connect to PyBullet GUI
+        armId = RobotController.initialize_pybullet(logger=logger)
+        endEffectorIndex = END_EFFECTOR_INDEX
 
-    # Connect to PyBullet GUI
-    logger.console_info("Starting PyBullet GUI...")
-    armId = RobotController.initialize_pybullet(logger=logger)
-    endEffectorIndex = END_EFFECTOR_INDEX
-
-    logger.console_info("PyBullet initialized in GUI mode")
+    console.print("[green]✓[/green] PyBullet initialized in GUI mode")
 
     # Initialize simulation components
-    logger.console_info("Initializing simulation components...")
-    simulation_state = SimulationState()
-    object_manager = ObjectManager(logger)
-    camera_manager = CameraManager(logger)
-    robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager, logger)
-    logger.console_info("Simulation components initialized")
+    with console.status("[cyan]Initializing simulation components...", spinner="dots"):
+        simulation_state = SimulationState()
+        object_manager = ObjectManager(logger)
+        camera_manager = CameraManager(logger)
+        robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager, logger)
+
+    console.print("[green]✓[/green] Simulation components initialized")
 
     # Clear images folder from previous runs
     images_folder = IMAGES_FOLDER
@@ -221,37 +274,53 @@ def initialize_simulation(scene_name, logger):
         logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
 
     # Load scene
-    logger.console_info(f"Loading scene: {scene_name}")
-    scene = load_scene(scene_name)
-    logger.console_info(f"Scene loaded: {scene.metadata.name}")
+    with console.status(f"[cyan]Loading scene: {scene_name}...", spinner="dots"):
+        scene = load_scene(scene_name)
+
+    console.print(f"[green]✓[/green] Scene loaded: [bold]{scene.metadata.name}[/bold]")
 
     # Load objects from scene
-    logger.console_info("Loading objects...")
-    for obj in scene.objects:
-        if obj.type == 'cube':
-            object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
-            logger.app_logger.info(f"Loaded cube: {obj.name} at {obj.position}")
-        else:
-            logger.app_logger.warning(f"Unknown object type: {obj.type}")
+    with console.status("[cyan]Loading objects...", spinner="dots"):
+        for obj in scene.objects:
+            if obj.type == 'cube':
+                object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
+                logger.app_logger.info(f"Loaded cube: {obj.name} at {obj.position}")
+            else:
+                logger.app_logger.warning(f"Unknown object type: {obj.type}")
 
-    logger.console_info(f"Loaded {len(object_manager.objects)} objects")
+    console.print(f"[green]✓[/green] Loaded {len(object_manager.objects)} objects")
 
-    # Stabilize robot
-    logger.console_info("Stabilizing robot...")
-    robot_controller.stabilize()
-    logger.console_info("Robot stabilized")
+    # Stabilization sequence
+    with console.status("[cyan]🤖 Stabilizing robot...", spinner="dots"):
+        # First stabilize robot at rest pose with motors active
+        robot_controller.stabilize()
+        # Reset gripper orientation (move_to_target runs simulation internally)
+        robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
+        robot_controller.reset_orientation()
+        # Allow system to settle with correct orientation
+        for i in range(STABILIZATION_LOOP_STEPS):
+            p.stepSimulation()
+
+    console.print("[green]✓[/green] Robot stabilized")
+
+    # Capture initial panorama after stabilization
+    with console.status("[cyan]📸 Capturing initial panorama...", spinner="dots"):
+        camera_manager.capture_and_save_panorama("initial_stabilized")
+
+    console.print("[green]✓[/green] Initial panorama captured")
 
     # Initialize Interactive LLM Controller
-    logger.console_info("Initializing interactive LLM controller...")
-    interactive_controller = InteractiveLLMController(
-        robot_controller,
-        object_manager,
-        camera_manager,
-        simulation_state,
-        logger
-    )
-    logger.console_info("Interactive LLM controller initialized")
-    logger.console_info(f"Registered objects: {list(object_manager.objects.keys())}")
+    with console.status("[cyan]Initializing interactive LLM controller...", spinner="dots"):
+        interactive_controller = InteractiveLLMController(
+            robot_controller,
+            object_manager,
+            camera_manager,
+            simulation_state,
+            logger
+        )
+
+    console.print("[green]✓[/green] Interactive LLM controller initialized")
+    logger.app_logger.info(f"Registered objects: {list(object_manager.objects.keys())}")
 
     return {
         "controller": interactive_controller,
@@ -277,18 +346,16 @@ def main():
 
     # Initialize simulation
     try:
-        print("\nInitializing simulation...")
+        console.print()
         sim_components = initialize_simulation(args.scene, logger)
         controller = sim_components["controller"]
         object_manager = sim_components["object_manager"]
         robot_controller = sim_components["robot_controller"]
         scene = sim_components["scene"]
-
-        print(f"Scene loaded: {scene.metadata.name}")
-        print(f"Objects: {list(object_manager.objects.keys())}")
+        console.print()
 
     except Exception as e:
-        print(f"\nERROR: Failed to initialize simulation: {e}")
+        console.print(f"\n[bold red]ERROR:[/bold red] Failed to initialize simulation: {e}")
         logger.app_logger.error(f"Initialization failed: {e}", exc_info=True)
         return 1
 
@@ -297,10 +364,15 @@ def main():
 
     # Print welcome message
     print_welcome()
-    print(f"Scene: {scene.metadata.name}")
-    print(f"Objects loaded: {len(object_manager.objects)}")
-    print(f"Ready for commands!\n")
-    print_separator("-")
+
+    # Scene info panel
+    scene_info = Text()
+    scene_info.append("Scene: ", style="bold")
+    scene_info.append(f"{scene.metadata.name}\n", style="cyan")
+    scene_info.append("Objects: ", style="bold")
+    scene_info.append(f"{len(object_manager.objects)}", style="green")
+    console.print(Panel(scene_info, title="🎬 Simulation Ready", border_style="green", padding=(0, 2)))
+    console.print()
 
     # Main chat loop
     try:
@@ -309,7 +381,7 @@ def main():
             try:
                 user_input = get_input_with_simulation().strip()
             except EOFError:
-                print("\n\nExiting...")
+                console.print("\n\n[yellow]Exiting...[/yellow]")
                 break
 
             if not user_input:
@@ -320,7 +392,7 @@ def main():
                 command = user_input.lower()
 
                 if command == '/quit' or command == '/exit':
-                    print("\nExiting console...")
+                    console.print("\n[yellow]Exiting console...[/yellow]")
                     break
 
                 elif command == '/help':
@@ -334,38 +406,46 @@ def main():
                 elif command == '/clear':
                     session.conversation_history = []
                     session.messages = []
-                    print("\n[Conversation history cleared]")
+                    console.print("\n[green]✓ Conversation history cleared[/green]")
                     continue
 
                 elif command == '/verbose':
                     session.verbose = not session.verbose
-                    status = "ON" if session.verbose else "OFF"
-                    print(f"\n[Verbose mode: {status}]")
+                    status = "🔊 ON" if session.verbose else "🔇 OFF"
+                    color = "green" if session.verbose else "yellow"
+                    console.print(f"\n[{color}]Verbose mode: {status}[/{color}]")
                     continue
 
                 else:
-                    print(f"\n[Unknown command: {user_input}]")
-                    print("[Type /help for available commands]")
+                    console.print(f"\n[red]Unknown command: {user_input}[/red]")
+                    console.print("[dim]Type /help for available commands[/dim]")
                     continue
 
             # Add user message to session
             session.messages.append({"role": "user", "content": user_input})
             logger.log_interactive_message("user", user_input)
 
-            # Get response from LLM controller
-            print("\nAssistant: ", end="", flush=True)
+            # Get response from LLM controller with status indicator
+            console.print()
             try:
-                assistant_response, tool_results, panorama_base64, token_usage = controller.handle_message(
-                    user_input,
-                    session.conversation_history
-                )
+                with console.status("[bold cyan]🤖 Thinking...", spinner="dots"):
+                    assistant_response, tool_results, panorama_base64, token_usage = controller.handle_message(
+                        user_input,
+                        session.conversation_history
+                    )
 
                 # Update token counters
                 session.total_input_tokens += token_usage["input_tokens"]
                 session.total_output_tokens += token_usage["output_tokens"]
 
-                # Display assistant response
-                print(assistant_response)
+                # Display assistant response in a panel
+                response_panel = Panel(
+                    Markdown(assistant_response),
+                    title="🤖 Assistant",
+                    border_style="green",
+                    padding=(1, 2)
+                )
+                console.print(response_panel)
 
                 # Display tool results if any
                 if tool_results:
@@ -375,11 +455,18 @@ def main():
                 if panorama_base64:
                     filepath = save_panorama(panorama_base64, session_name)
                     if filepath:
-                        print(f"\n  [Panorama saved: {filepath}]")
+                        console.print(f"[dim]📸 Panorama saved: {filepath}[/dim]")
 
                 # Display token usage for this turn
                 total_turn_tokens = token_usage["input_tokens"] + token_usage["output_tokens"]
-                print(f"\n  [Tokens: {token_usage['input_tokens']:,} in / {token_usage['output_tokens']:,} out | Total this turn: {total_turn_tokens:,}]")
+                token_info = Text()
+                token_info.append("💰 Tokens: ", style="dim")
+                token_info.append(f"{token_usage['input_tokens']:,} in", style="cyan")
+                token_info.append(" / ", style="dim")
+                token_info.append(f"{token_usage['output_tokens']:,} out", style="magenta")
+                token_info.append(" | Total: ", style="dim")
+                token_info.append(f"{total_turn_tokens:,}", style="bold green")
+                console.print(token_info)
 
                 # Add assistant message to session
                 message_data = {
@@ -394,44 +481,47 @@ def main():
                 logger.log_interactive_message("assistant", assistant_response)
 
             except KeyboardInterrupt:
-                print("\n\n[Interrupted]")
+                console.print("\n\n[yellow]⚠ Interrupted[/yellow]")
                 raise
             except Exception as e:
                 error_message = f"Error: {str(e)}"
-                print(f"\n{error_message}")
+                console.print(Panel(error_message, title="❌ Error", border_style="red", padding=(1, 2)))
                 logger.app_logger.error(f"Error handling message: {e}", exc_info=True)
                 session.messages.append({
                     "role": "assistant",
                     "content": error_message
                 })
 
-            print_separator("-")
+            console.rule(style="dim")
 
     except KeyboardInterrupt:
-        print("\n\nInterrupted by user. Exiting...")
+        console.print("\n\n[yellow]Interrupted by user. Exiting...[/yellow]")
     except Exception as e:
-        print(f"\n\nUnexpected error: {e}")
+        console.print(f"\n\n[bold red]Unexpected error: {e}[/bold red]")
         logger.app_logger.error(f"Unexpected error in main loop: {e}", exc_info=True)
         return 1
     finally:
         # Cleanup
-        print("\nCleaning up...")
+        console.print("\n[cyan]Cleaning up...[/cyan]")
         try:
             p.disconnect()
-            print("PyBullet disconnected")
+            console.print("[green]✓ PyBullet disconnected[/green]")
         except:
             pass
 
         # Print final stats
-        print("\n" + "="*70)
-        print("SESSION SUMMARY".center(70))
-        print("="*70)
-        print(f"Messages exchanged: {len(session.messages)}")
-        print(f"Total input tokens: {session.total_input_tokens:,}")
-        print(f"Total output tokens: {session.total_output_tokens:,}")
-        print(f"Total tokens: {session.total_input_tokens + session.total_output_tokens:,}")
-        print("="*70)
-        print("\nGoodbye!\n")
+        console.print()
+        summary_table = Table(title="📊 Session Summary", border_style="cyan", show_header=True, header_style="bold cyan")
+        summary_table.add_column("Metric", style="white")
+        summary_table.add_column("Value", justify="right", style="green")
+
+        summary_table.add_row("Messages exchanged", str(len(session.messages)))
+        summary_table.add_row("Total input tokens", f"{session.total_input_tokens:,}")
+        summary_table.add_row("Total output tokens", f"{session.total_output_tokens:,}")
+        summary_table.add_row("Total tokens", f"{session.total_input_tokens + session.total_output_tokens:,}")
+
+        console.print(summary_table)
+        console.print("\n[bold cyan]👋 Goodbye![/bold cyan]\n")
         logger.console_info("Console session ended")
 
     return 0
