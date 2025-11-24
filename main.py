@@ -14,6 +14,7 @@ from src.llm_controller import LLMController
 from src.llm_validator import LLMValidator
 from src.logger import SimulationLogger
 from src.scene_loader import load_scene, list_available_scenes, SceneLoadError
+from src.vision_analyzer import VisionAnalyzer
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='PyBullet Franka Panda robotics simulation with LLM control')
@@ -90,6 +91,43 @@ logger.console_info("Capturing initial scene panorama...")
 camera_manager.capture_and_save_panorama("initial_stabilized")
 logger.console_info("Initial panorama captured")
 
+# Run vision analysis if enabled
+if VISION_ANALYSIS_ENABLED:
+    try:
+        logger.console_info("Vision analysis enabled, initializing analyzer...")
+        vision_analyzer = VisionAnalyzer(logger)
+
+        # Find the panorama path
+        panorama_files = glob.glob(os.path.join(IMAGES_FOLDER, "panorama_*_initial_stabilized.jpg"))
+        if panorama_files:
+            latest_panorama = max(panorama_files, key=os.path.getctime)
+
+            # Prepare object info for vision analysis
+            object_info = {}
+            for obj_name in object_manager.objects.keys():
+                obj_id = object_manager.get_object_id(obj_name)
+                position = object_manager.get_object_center_position(obj_name)
+                dimensions = object_manager.get_object_dimensions(obj_id)
+                object_info[obj_name] = {
+                    "position": position,
+                    "dimensions": dimensions
+                }
+
+            # Run vision analysis
+            logger.console_info("Running vision analysis on scene...")
+            analysis_result = vision_analyzer.analyze_scene(
+                latest_panorama,
+                object_info,
+                scene_name=scene.metadata.name
+            )
+            logger.console_info("Vision analysis completed")
+        else:
+            logger.console_warning("No panorama found for vision analysis")
+    except Exception as e:
+        logger.console_error(f"Vision analysis failed: {str(e)}")
+        logger.app_logger.error(f"Vision analysis error: {str(e)}", exc_info=True)
+else:
+    logger.console_info("Vision analysis disabled (VISION_ANALYSIS_ENABLED=False)")
 
 # Initialize LLM controller and validator
 logger.console_info("Initializing LLM systems...")

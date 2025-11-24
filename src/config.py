@@ -141,3 +141,14 @@ INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System promp
 # Prompt caching settings (for interactive mode)
 ENABLE_PROMPT_CACHING = True  # Enable/disable prompt caching for system prompt and tools
 PROMPT_CACHE_TTL = None  # None = 5 minutes (default), "1h" = 1 hour (costs 2x for cache writes)
+
+# Vision analysis settings
+VISION_ANALYSIS_ENABLED = True  # Enable/disable vision model analysis
+# Model options (from fastest to slowest):
+# - "Salesforce/blip-vqa-base" (~450MB, fast, optimized for visual Q&A)
+# - "Salesforce/blip-image-captioning-base" (~450MB, fast, good for descriptions)
+# - "Salesforce/blip2-opt-2.7b" (~5GB, slower but more accurate)
+VISION_MODEL_NAME = "Salesforce/blip-vqa-base"  # HuggingFace model identifier
+VISION_MODEL_DEVICE = "cpu"  # "cuda" or "cpu"
+VISION_ANALYSIS_LOG_DIR = 'logs'  # Directory for vision analysis logs (uses main logs folder)
+VISION_ANALYSIS_CACHE_DIR = None  # Model cache location (None = default HF cache)
