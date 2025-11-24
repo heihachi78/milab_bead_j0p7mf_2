@@ -307,7 +307,7 @@ class LLMValidator:
         plan = self._parse_json_response(response_text)
         return plan
 
-    def get_validated_plan(self, task_description: str, panorama_path: Optional[str] = None, max_iterations: Optional[int] = None) -> tuple[Dict[str, Any], bool, Optional[Dict[str, Any]]]:
+    def get_validated_plan(self, task_description: str) -> tuple[Dict[str, Any], bool, Optional[Dict[str, Any]]]:
         """
         Generate and validate a plan using simplified single-call workflow.
 
@@ -316,12 +316,8 @@ class LLMValidator:
         2. Receives plan with reasoning and commands from the LLM
         3. Performs local Python validation checks (structure, logic, constraints)
 
-        This replaces the old multi-stage workflow with a simpler, faster single-call approach.
-
         Args:
             task_description: The task to accomplish
-            panorama_path: Path to panorama image (unused in simplified workflow, kept for API compatibility)
-            max_iterations: Maximum iterations (unused in simplified workflow, kept for API compatibility)
 
         Returns:
             Tuple of (plan, is_valid, validation_errors_dict)

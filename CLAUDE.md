@@ -4,201 +4,327 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a PyBullet-based robotics simulation featuring a Franka Panda robot arm controlled by Claude AI (Anthropic) through natural language commands. The system supports both batch task execution and interactive conversational control.
+This is a PyBullet-based robotics simulation featuring a **Franka Panda robot arm** controlled by **Claude AI** through natural language commands. The system bridges natural language instructions with low-level robot control using vision analysis and spatial reasoning.
 
-## Running the Application
+## Essential Commands
 
-### Setup
+### Running the Application
+
 ```bash
+# Batch mode - autonomous task execution with validation
+python main.py --scene default
+python main.py --scene scene_01
+
+# Console interactive mode - terminal-based conversational control
+python main_console.py --scene default
+
+# Streamlit interactive mode - web-based UI (access at http://localhost:8501)
+streamlit run main_interactive.py
+```
+
+### Development Setup
+
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment variables (required)
-# Create .env file with:
-ANTHROPIC_API_KEY=your_key_here
-ANTHROPIC_MODEL=claude-sonnet-4-5-20250929
+# Set up environment variables (create .env file)
+echo "ANTHROPIC_API_KEY=your_key_here" > .env
+echo "ANTHROPIC_MODEL=claude-sonnet-4-5-20250929" >> .env
 ```
 
-### Three Execution Modes
+### Testing and Debugging
 
-1. **Batch Mode** (main.py) - Autonomous task execution with LLM validation
-   ```bash
-   python main.py --scene default
-   python main.py --scene scene_01
-   ```
+```bash
+# List available scenes
+ls scenes/*.yaml
 
-2. **Interactive Console Mode** (main_console.py) - Terminal-based chat with continuous physics
-   ```bash
-   python main_console.py --scene default
-   ```
+# Monitor logs in real-time
+tail -f logs/app_*.log
 
-3. **Interactive Streamlit Mode** (main_interactive.py) - Web-based chat interface
-   ```bash
-   streamlit run main_interactive.py
-   ```
+# Monitor API calls
+tail -f logs/api_calls_*.log
+
+# View generated panoramas
+ls -lh images/
+```
 
 ## Architecture
 
-### Core Execution Flow (Batch Mode)
+### Two Distinct Control Modes
 
-The batch mode (main.py) implements a sophisticated multi-stage LLM validation workflow:
+The system has fundamentally different architectures for batch vs interactive modes:
 
-1. **Scene Setup**: Load scene YAML, initialize PyBullet simulation, load objects
-2. **Stabilization**: Stabilize robot physics and capture initial panorama
-3. **Vision Analysis Stage**: LLM analyzes panorama image to identify object positions and reachability
-4. **Spatial Analysis Stage**: LLM combines vision analysis with exact object positions to understand blocking relationships
-5. **Planning Stage**: LLM generates initial execution plan using both vision and spatial analyses
-6. **Validation Loop** (up to MAX_VALIDATION_ITERATIONS):
-   - **Review Stage**: Critic LLM evaluates the plan against scene image and task
-   - **Refinement Stage**: If rejected, planner LLM refines based on critique
-   - Loop until plan is validated or max iterations reached
-7. **Execution**: Execute validated plan using RobotController commands
-8. **Cleanup**: Close logs and disconnect PyBullet
+#### 1. Batch Mode (`main.py`)
+- **Purpose**: Autonomous execution with validated planning
+- **Workflow**: Single LLM call → Local Python validation → Execution → Optional verification
+- **Key Files**: `src/llm_validator.py`, `src/llm_controller.py`
+- **Validation**: Python-based checks for plan structure, logical sequence, and constraints
+- **Verification**: Optional post-execution verification using panorama analysis (controlled by `ENABLE_VERIFICATION` in config)
 
-This multi-stage approach with separate vision/spatial analysis and iterative critique-refinement improves plan reliability.
+#### 2. Interactive Modes (`main_console.py` and `main_interactive.py`)
+- **Purpose**: Conversational control with tool calling
+- **Workflow**: User message → Claude with tools → Tool execution → Response
+- **Key File**: `src/interactive_llm_controller.py`
+- **Tools**: 10 tools for querying scene state and controlling robot (see below)
+- **Validation**: Human-in-the-loop
 
-### Interactive Mode Flow
+### Core Component Hierarchy
 
-Interactive modes (console and Streamlit) use a different architecture:
+```
+Scene YAML → SceneLoader → ObjectManager → PyBullet Simulation
+                                                   ↓
+                                          RobotController (IK, gripper, actions)
+                                                   ↓
+                                          CameraManager (5-view panoramas)
+                                                   ↓
+                              ┌──────────────────────────────────────┐
+                              ↓                                      ↓
+                      LLMValidator (batch)              InteractiveLLMController
+                              ↓                                      ↓
+                      LLMController (execution)                Tool execution
+```
 
-- **Tool-Based Control**: Claude responds to user messages using defined tools (pick_up, place, get_objects, etc.)
-- **Conversational State**: Maintains conversation history for context-aware responses
-- **Continuous Physics**: Console mode runs physics simulation during user input
-- **Real-time Feedback**: Users can query state, request panoramas, and adjust commands dynamically
+### Module Responsibilities
 
-### Key Components
+- **`src/config.py`**: Centralized configuration for all parameters (robot, physics, LLM, camera)
+- **`src/robot_controller.py`**: Low-level robot control (IK solver, gripper, pick/place actions)
+- **`src/llm_validator.py`**: Batch mode planning and validation (simplified single-call workflow)
+- **`src/llm_controller.py`**: Executes validated plans by mapping commands to robot actions
+- **`src/interactive_llm_controller.py`**: Tool-based conversational control for interactive modes
+- **`src/object_manager.py`**: Object lifecycle (loading, position queries, dimensions)
+- **`src/camera_manager.py`**: Multi-view panorama capture (5 views: 0°, 90°, 180°, 270°, top)
+- **`src/scene_loader.py`**: YAML scene parsing and validation
+- **`src/logger.py`**: Dual logging system (console via Rich + rotating file logs)
 
-**src/llm_validator.py** - Multi-stage validation orchestrator
-- `_analyze_scene_vision()`: Stage 1 - Vision-based analysis of panorama
-- `_analyze_spatial_relationships()`: Stage 2 - Spatial reasoning with exact positions
-- `_generate_initial_plan()`: Stage 3 - Generate plan from analyses
-- `_critique_plan()`: Review stage - Validate plan against constraints
-- `_refine_plan()`: Refinement stage - Fix plan based on critique
-- `get_validated_plan()`: Main orchestration method
-- Uses prompt caching for system prompts and panorama images to reduce costs
+## Available Robot Commands
 
-**src/llm_controller.py** - Plan execution engine
-- `execute_plan()`: Executes validated command sequences (pick_up, place, place_on, rotate_gripper_90, reset_gripper_orientation)
+### Batch Mode Commands
 
-**src/interactive_llm_controller.py** - Conversational control
-- `handle_message()`: Process user messages with Claude's native tool calling
-- Defines tools for robot actions, object queries, and panorama capture
-- Implements prompt caching for system prompt and tools
+Commands are generated by the LLM and executed sequentially:
 
-**src/robot_controller.py** - Low-level robot control
-- IK-based motion planning and execution
-- Gripper control (open/close)
-- High-level actions: `pick_up()`, `place()`, `place_on()`
-- Orientation control: `rotate_orientation_90()`, `reset_orientation()`
+- `pick_up(object_name)` - Pick up specified object
+- `place(x, y, z)` - Place held object at coordinates (ground placement requires z=0)
+- `place_on(target_object)` - Place held object on top of another object
+- `rotate_gripper_90()` - Rotate gripper 90 degrees
+- `reset_gripper_orientation()` - Reset gripper to default orientation
 
-**src/object_manager.py** - Object lifecycle management
-- Load cubes with RGBA colors and positions
-- Query object positions and dimensions
-- Track object IDs
+**Validation Rules**:
+- Cannot pick_up while already holding an object
+- Cannot place/place_on without picking up first
+- Ground placements must have z=0
+- All commands require proper JSON structure with action field
 
-**src/camera_manager.py** - Multi-view panorama capture
-- Captures 5 views (front, right, back, left, top)
-- Stitches into single panorama image for LLM vision analysis
+### Interactive Mode Tools
 
-**src/scene_loader.py** - YAML scene parsing
-- Loads scene configuration from scenes/*.yaml
-- Defines metadata, objects, and task descriptions
+10 tools available to Claude during conversational control:
 
-**src/config.py** - Centralized configuration
-- Robot parameters (joint limits, IK settings)
-- Physics parameters (gravity, time steps)
-- Movement thresholds and offsets
-- Camera configuration
-- LLM settings (MAX_VALIDATION_ITERATIONS, prompt caching)
+**Query Tools**:
+- `get_gripper_position()` - Current end-effector position
+- `get_all_objects()` - List all objects with positions and dimensions
+- `get_object_position(object_name)` - Specific object position
+- `get_panorama()` - Capture and return scene panorama (base64)
 
-**src/logger.py** - Comprehensive logging
-- Dual logging: console (Rich) + file (rotating logs)
-- LLM request/response tracking with token usage and cache metrics
-- Simulation events and robot operations
+**Action Tools**:
+- `pick_up(object_name)` - Pick up object
+- `place(x, y, z)` - Place at coordinates
+- `place_on(target_object)` - Place on another object
+- `open_gripper()` - Open gripper
+- `close_gripper()` - Close gripper
+- `move_gripper(x, y, z)` - Move gripper to position
 
-### Prompt System
+## Scene System
 
-The system uses 11 different prompt templates (in prompts/):
+### Scene File Structure
 
-**Batch Mode (5-stage workflow)**:
-1. `vision_analysis_system_prompt.txt` / `vision_analysis_user_prompt.txt` - Analyze panorama for object visibility
-2. `spatial_analysis_system_prompt.txt` / `spatial_analysis_user_prompt.txt` - Combine vision with positions
-3. `planning_system_prompt.txt` / `planning_user_prompt.txt` - Generate execution plan
-4. `review_system_prompt.txt` / `review_user_prompt.txt` - Critique plan validity
-5. `refinement_system_prompt.txt` / `refinement_user_prompt.txt` - Refine based on critique
+Scenes are YAML files in `scenes/` directory:
 
-**Interactive Mode**:
-- `interactive_system_prompt.txt` - Conversational robot control with tool definitions
-
-### Scene Configuration
-
-Scenes are defined in YAML files (scenes/*.yaml):
 ```yaml
 metadata:
   name: "Scene Name"
-  description: "Description"
+  description: "Scene description"
 
 objects:
   - name: "red_cube"
     type: "cube"
-    position: [0.3, 0.3, 0.05]
-    color: [1, 0, 0, 1]  # RGBA
+    position: [0.3, 0.3, 0.05]  # [x, y, z] in meters
+    color: [1, 0, 0, 1]         # RGBA (0-1 range)
     scale: 1.0
 
 task:
-  description: "Natural language task for batch mode"
+  description: "Task to accomplish"
 ```
 
-Robot workspace: x: [-0.5, 0.7], y: [-0.7, 0.7], z: [0, 0.8] meters
+### Robot Workspace Limits
 
-## Key Configuration Parameters
+- **X-axis**: -0.5 to 0.7 meters
+- **Y-axis**: -0.7 to 0.7 meters
+- **Z-axis**: 0 to 0.8 meters
 
-**src/config.py** contains critical tuning parameters:
+Objects outside this workspace cannot be manipulated.
 
-- `MAX_VALIDATION_ITERATIONS = 3` - Critique-refinement cycles in batch mode
-- `STABILIZATION_LOOP_STEPS = 2500` - Physics stabilization before task execution
-- `THRESHOLD_PRECISE = 0.001` - Position accuracy for robot movements (meters)
-- `LINEAR_MOVEMENT_SPEED = 0.1` - Robot movement speed (m/s)
-- `ENABLE_PROMPT_CACHING = True` - Use Anthropic prompt caching to reduce costs
-- `PANORAMA_QUALITY = 75` - JPEG quality for panorama images (affects token usage)
-- `INTERACTIVE_MAX_TOKENS = 4096` - Max tokens for interactive responses
+### Creating New Scenes
 
-## Development Notes
+1. Copy `scenes/default.yaml` to `scenes/new_scene.yaml`
+2. Modify object positions (within workspace limits), colors, and task
+3. Run with `python main.py --scene new_scene`
 
-### Modifying Robot Actions
+## Configuration System
 
-To add new robot commands:
-1. Add method to `RobotController` (src/robot_controller.py)
-2. For batch mode: Add action type to `LLMController.execute_plan()` and update planning prompts
-3. For interactive mode: Add tool definition in `InteractiveLLMController._define_tools()` and tool handler
+All parameters centralized in `src/config.py`:
 
-### Modifying Validation Logic
+### Key Parameters to Adjust
 
-The validation workflow is in `LLMValidator.get_validated_plan()`:
-- Adjust `MAX_VALIDATION_ITERATIONS` in config.py to change critique-refinement cycles
-- Modify prompt templates in prompts/ to adjust LLM behavior
-- Edit `_critique_plan()` or `_refine_plan()` to change validation logic
+**Robot Control**:
+- `LINEAR_MOVEMENT_SPEED = 0.1` - Movement speed (m/s)
+- `THRESHOLD_PRECISE = 0.001` - Position accuracy threshold (meters)
+- `STABILIZATION_LOOP_STEPS = 2500` - Physics stabilization cycles
 
-### Adding New Object Types
+**LLM Settings**:
+- `SIMPLIFIED_MODE = True` - Uses single-call workflow (always True)
+- `INTERACTIVE_MAX_TOKENS = 4096` - Max tokens per interactive response
+- `ENABLE_PROMPT_CACHING = True` - Use Anthropic prompt caching
+- `ENABLE_VERIFICATION = True` - Enable post-execution task verification
 
-Currently only "cube" objects are supported. To add new types:
-1. Update `ObjectManager.load_<type>()` to load URDF/geometry
-2. Update scene loader to handle new type
-3. Update planning prompts to describe new object capabilities
+**Camera**:
+- `CAMERA_IMAGE_WIDTH = 640` - Resolution
+- `PANORAMA_QUALITY = 75` - JPEG quality (affects API token usage)
+- `CAMERA_YAW_ANGLES = [0, 90, 180, 270, 0]` - Panorama view angles
 
-### Debugging
+## Prompt Caching Strategy
 
-- Logs are written to `logs/` directory with timestamps
-- Console output uses Rich formatting for clarity
-- Set `LOG_API_CALLS = True` in config.py to log all LLM API calls
-- Check `logs/api_calls_*.log` for detailed request/response traces
-- Panoramas are saved to `images/` directory for inspection
+The system uses Anthropic's prompt caching to reduce API costs by up to 90%:
 
-### Prompt Caching
+### Batch Mode Caching
 
-The system uses Anthropic's prompt caching to reduce costs:
-- Vision analysis: Caches panorama image (reused across iterations)
-- Review stage: Caches system prompt and panorama
-- Interactive mode: Caches system prompt and tool definitions
-- Cache TTL is 5 minutes (configurable via PROMPT_CACHE_TTL)
-- Check logs for cache hit/miss metrics (cache_creation_tokens, cache_read_tokens)
+- **System prompts**: Cached on first call, reused across scenes
+- **Panorama images**: Cached in verification stage if enabled
+- Saves ~1500-2000 tokens per verification call
+
+### Interactive Mode Caching
+
+- **System prompt + tool definitions**: Cached on first message, reused for entire conversation
+- Saves ~1500 tokens per message after the first
+- Example: 10-message conversation saves ~78% on system prompt costs
+
+### Configuration
+
+Toggle caching in `src/config.py`:
+```python
+ENABLE_PROMPT_CACHING = True  # Enable/disable
+PANORAMA_QUALITY = 75  # Lower = fewer tokens but worse quality
+```
+
+## Logging System
+
+### Log Files
+
+- `logs/app_YYYYMMDD_HHMMSS.log` - Application events, robot actions, errors
+- `logs/api_calls_YYYYMMDD_HHMMSS.log` - Detailed LLM request/response traces with token usage
+
+### Log Configuration
+
+Control logging in `src/config.py`:
+```python
+LOG_API_CALLS = True  # Enable detailed API logging
+LOGS_FOLDER = 'logs'
+```
+
+### Token Usage Tracking
+
+Logs show cache performance:
+```
+[LLM] Request completed
+  Input tokens: 250
+  Cache creation tokens: 1842  # New content cached
+  Cache read tokens: 0
+  Output tokens: 156
+```
+
+Next request:
+```
+[LLM] Request completed
+  Input tokens: 300
+  Cache creation tokens: 0
+  Cache read tokens: 1842  # Reused cached content
+  Output tokens: 189
+```
+
+## Development Guidelines
+
+### Adding New Robot Actions
+
+1. **Add method to RobotController** (`src/robot_controller.py`)
+2. **For batch mode**: Update `LLMController.execute_plan()` to handle new action
+3. **For batch mode**: Update `prompts/simplified_system_prompt.txt` to document command
+4. **For interactive mode**: Add tool definition in `InteractiveLLMController.get_tool_definitions()`
+5. **For interactive mode**: Add execution handler in `InteractiveLLMController._execute_tool()`
+
+### Modifying Prompts
+
+Prompt files are in `prompts/` directory:
+- `simplified_system_prompt.txt` - Batch mode planning with examples
+- `simplified_user_prompt.txt` - Batch mode user prompt template
+- `interactive_system_prompt.txt` - Interactive mode system prompt
+- `verification_system_prompt.txt` - Post-execution verification system prompt
+- `verification_user_prompt.txt` - Post-execution verification user prompt template
+
+### Adding Object Types
+
+Currently only cubes are supported. To add new shapes:
+
+1. **Add geometry loader** in `ObjectManager` (`src/object_manager.py`)
+2. **Update scene loader** to handle new type (`src/scene_loader.py`)
+3. **Update prompts** to describe handling considerations
+
+### Debugging Workflow
+
+1. **Check logs**: `tail -f logs/app_*.log`
+2. **View panoramas**: Generated images saved to `images/` directory
+3. **Monitor API usage**: Check `logs/api_calls_*.log` for token counts
+4. **Enable verbose logging**: Set `LOG_API_CALLS = True` in config
+5. **Check validation**: Logs show each validation stage and errors
+
+## Common Issues and Solutions
+
+### Plan Validation Failures
+
+If the LLM-generated plan fails local validation:
+1. Check log output for specific validation errors
+2. Common issues:
+   - Attempting to place without picking first
+   - Ground placement with z != 0
+   - Invalid action names
+   - Missing required fields in commands
+3. The validation logic is in `LLMValidator._validate_plan_locally()`
+
+### Robot Cannot Reach Object
+
+- Verify object position is within workspace limits (see above)
+- Check scene YAML has correct coordinates
+- Ensure physics has stabilized (wait for `STABILIZATION_LOOP_STEPS`)
+
+### Interactive Mode Not Responding
+
+- Console mode runs physics continuously - don't block with long operations
+- Streamlit caches simulation initialization - restart if needed
+- Check PyBullet GUI isn't already running: `pkill -f pybullet`
+
+### High API Costs
+
+1. Enable prompt caching: `ENABLE_PROMPT_CACHING = True`
+2. Reduce panorama quality: `PANORAMA_QUALITY = 50`
+3. Lower max tokens: `INTERACTIVE_MAX_TOKENS = 2048`
+4. Monitor token usage in logs
+
+## Important Notes
+
+- **Simplified Workflow**: The codebase uses a simplified single-call workflow with local Python validation. Any references to a "5-stage validation workflow" in external documentation are outdated.
+- **Vision Analysis**: Batch mode does NOT use vision analysis - plans are generated from object position data only. Panoramas are only captured for post-execution verification.
+- **Prompt Caching**: System prompts and images are marked with `cache_control: {"type": "ephemeral"}` for caching
+- **Object Types**: Only cubes are currently supported; URDF/mesh loading for other shapes would require extension
+- **Physics Stabilization**: Always run `STABILIZATION_LOOP_STEPS` before capturing panoramas or executing plans to ensure stable physics state

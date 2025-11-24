@@ -184,25 +184,7 @@ class SimulationLogger:
         self.llm_logger.info("=" * 80)
         self.llm_logger.info("")  # Empty line for readability
 
-    def log_llm_error(self, error: str, stage: str = None):
-        """
-        Log an LLM error.
-
-        Args:
-            error: Error message
-            stage: Optional stage identifier
-        """
-        stage_info = f" | Stage: {stage}" if stage else ""
-        self.llm_logger.error(f"LLM ERROR{stage_info}: {error}")
-
     # ============== Robot Logging Methods ==============
-
-    def log_robot_action(self, action: str, details: Optional[str] = None):
-        """Log a robot action."""
-        msg = f"ACTION: {action}"
-        if details:
-            msg += f" | {details}"
-        self.robot_logger.info(msg)
 
     def log_robot_operation_start(self, operation: str, **params):
         """
@@ -234,13 +216,6 @@ class SimulationLogger:
         self.robot_logger.info(f"OPERATION END: {operation} | Status: {status}")
         self.robot_logger.info("=" * 60)
         self.robot_logger.info("")  # Empty line for readability
-
-    def log_robot_movement(self, target_pos: list, current_pos: list, distance: float):
-        """Log robot movement details."""
-        self.robot_logger.debug(
-            f"MOVEMENT | Target: {self._format_pos(target_pos)} | "
-            f"Current: {self._format_pos(current_pos)} | Distance: {distance:.6f}m"
-        )
 
     def log_robot_pick(self, object_name: str, position: list):
         """Log pick operation."""
@@ -292,10 +267,6 @@ class SimulationLogger:
         """Log application error."""
         self.app_logger.error(message)
         self.console_logger.error(f"ERROR: {message}")
-
-    def log_app_state_change(self, old_state: str, new_state: str):
-        """Log application state change."""
-        self.app_logger.info(f"STATE CHANGE | {old_state} -> {new_state}")
 
     def log_app_simulation_start(self, time: float):
         """Log simulation start."""
@@ -570,41 +541,6 @@ class SimulationLogger:
         self.api_call_logger.info(formatted_response)
         self.api_call_logger.info("=" * 80)
         self.api_call_logger.info("")  # Empty line for readability
-
-    def log_api_call(self, stage: str, request: Dict[str, Any], response: str, usage: Any):
-        """
-        Log a simple API call.
-
-        Args:
-            stage: Stage identifier (e.g., "interactive", "tool_call")
-            request: Request summary dict
-            response: Response text
-            usage: Usage object from API response
-        """
-        self.llm_logger.info("=" * 80)
-        self.llm_logger.info(f"API CALL | Stage: {stage}")
-
-        if hasattr(usage, 'input_tokens') and hasattr(usage, 'output_tokens'):
-            input_tokens = usage.input_tokens
-            output_tokens = usage.output_tokens
-            total_tokens = input_tokens + output_tokens
-            self.llm_logger.info(f"TOKEN USAGE | Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}")
-
-            # Log cache metrics if available
-            if hasattr(usage, 'cache_creation_input_tokens') and hasattr(usage, 'cache_read_input_tokens'):
-                cache_created = usage.cache_creation_input_tokens
-                cache_read = usage.cache_read_input_tokens
-                if cache_created > 0 or cache_read > 0:
-                    self.llm_logger.info(f"CACHE USAGE | Created: {cache_created} | Read: {cache_read}")
-
-        self.llm_logger.info("-" * 80)
-        self.llm_logger.info("REQUEST (summary):")
-        self.llm_logger.info(json.dumps(request, indent=2))
-        self.llm_logger.info("-" * 80)
-        self.llm_logger.info("RESPONSE:")
-        self.llm_logger.info(response)
-        self.llm_logger.info("=" * 80)
-        self.llm_logger.info("")  # Empty line for readability
 
     # ============== Helper Methods ==============
 

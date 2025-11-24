@@ -117,14 +117,9 @@ logger.log_app_simulation_start(simulation_state.t)
 task_description = scene.task.description
 logger.app_logger.info(f"Task description: {task_description[:100]}...")
 
-# Find the latest panorama
-logger.console_info("Finding latest panorama...")
-panorama_path = llm_controller._find_latest_panorama()
-logger.app_logger.info(f"Using panorama: {panorama_path}")
-
 # Generate and validate plan using simplified workflow
 logger.console_info("Generating and validating execution plan...")
-validated_plan, is_valid, final_critique = llm_validator.get_validated_plan(task_description, panorama_path)
+validated_plan, is_valid, final_critique = llm_validator.get_validated_plan(task_description)
 
 # Check if validation succeeded
 if not is_valid:
@@ -282,15 +277,6 @@ if ENABLE_VERIFICATION and execution_result is not None:
 
     logger.console_info("=" * 80)
     logger.console_info("")
-
-'''
-robot_controller.pick_up('purple_cube')
-robot_controller.rotate_orientation_90()
-robot_controller.place_on('yellow_cube')
-robot_controller.reset_orientation()
-robot_controller.pick_up('red_cube')
-robot_controller.place_on('green_cube')
-'''
 
 logger.log_app_simulation_end(simulation_state.t)
 logger.console_info("Simulation completed successfully")
