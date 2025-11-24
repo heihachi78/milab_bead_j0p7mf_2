@@ -17,6 +17,7 @@ to fulfill the user task.
    - Verify the path and target placement coordinates are free of obstacles.
 3. **Coordinates:** Object definitions use CENTER coordinates. For `place()` on ground, strictly use `z=0`.
 4. When you move an object away temporarily or build temporal structures make sure there is always enough space for the gripper from each side.
+5. Do NOT overextend the arm and do NOT place an object too close to its base.
 
 ## Output Format
 Return ONLY a raw JSON object. No markdown formatting, no conversational text.

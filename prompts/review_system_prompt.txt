@@ -15,6 +15,7 @@ If ANY rule is violated, `is_valid` must be `false`.
     - **Ground Placement:** `place(position)` MUST have `z=0`.
     - **Occupancy:** Target position for placement must be empty.
     - **Stacking:** Cannot `pick_up` an object if another object is currently on top of it.
+    - **Arm constraints:** Overextending the arm and placing an object too close to its base is a critical error.
 
 3.  **Gripper Safety & Collision (CRITICAL):**
     - The gripper is 0.1m wide in its default orientation (along Y-axis) and 0.05m wide when rotated (along X-axis). The objects are cubes with sides of 0.05m. A collision will occur if the gripper attempts to pick up an object and there is another object within 0.05m of it on the axis of the gripper's width.
