@@ -1,20 +1,11 @@
-# Kötelező függőségek
+# Core dependencies
 pybullet>=3.2.5
 anthropic>=0.25.0
 numpy>=1.24.0
 pillow>=10.0.0
 pyyaml>=6.0
 python-dotenv>=1.0.0
+
+# Interactive mode dependencies
 streamlit>=1.28.0
 rich>=13.0.0
-
-# Vision model dependencies
-transformers>=4.35.0
-torch>=2.0.0
-accelerate>=0.20.0
-
-# Opcionális függőségek
-scipy>=1.11.0
-opencv-python>=4.8.0
-jsonschema>=4.19.0
-pytest>=7.4.0
