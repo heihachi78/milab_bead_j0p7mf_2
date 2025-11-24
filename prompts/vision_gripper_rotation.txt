@@ -1,1 +1,1 @@
-Looking at the {object_name}, the robotic gripper will approach from the top. Does the gripper need to be rotated 90 degrees from its default orientation to successfully grasp the object from above? Answer with only 'yes' or 'no', then explain your reasoning in one sentence.
+Does the {object_name} have another cube directly touching its side?

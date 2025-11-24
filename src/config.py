@@ -144,10 +144,12 @@ PROMPT_CACHE_TTL = None  # None = 5 minutes (default), "1h" = 1 hour (costs 2x f
 
 # Vision analysis settings
 VISION_ANALYSIS_ENABLED = True  # Enable/disable vision model analysis
+VISION_APPROACH_ANALYSIS_ENABLED = True  # Enable/disable approach feasibility analysis
 # Model options (from fastest to slowest):
-# - "Salesforce/blip-vqa-base" (~450MB, fast, optimized for visual Q&A)
+# - "Salesforce/blip-vqa-base" (~450MB, fast, but poor reasoning - NOT RECOMMENDED for approach analysis)
 # - "Salesforce/blip-image-captioning-base" (~450MB, fast, good for descriptions)
-# - "Salesforce/blip2-opt-2.7b" (~5GB, slower but more accurate)
+# - "Salesforce/blip2-opt-2.7b" (~5GB, slower but MUCH better reasoning - RECOMMENDED for approach analysis)
+# - "Salesforce/blip2-flan-t5-xl" (~4GB, good balance of speed and quality)
 VISION_MODEL_NAME = "Salesforce/blip-vqa-base"  # HuggingFace model identifier
 VISION_MODEL_DEVICE = "cpu"  # "cuda" or "cpu"
 VISION_ANALYSIS_LOG_DIR = 'logs'  # Directory for vision analysis logs (uses main logs folder)

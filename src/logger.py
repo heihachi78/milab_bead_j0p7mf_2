@@ -299,6 +299,36 @@ class SimulationLogger:
         """Log camera capture."""
         self.app_logger.info(f"CAMERA CAPTURE | Type: {capture_type} | File: {filename}")
 
+    def log_vision_analysis(self, analysis: Dict, filepath: str):
+        """
+        Log vision analysis results and save to JSON file.
+
+        Args:
+            analysis: Vision analysis results dictionary
+            filepath: Path where the JSON file should be saved
+        """
+        # Log summary to app logger
+        scene = analysis.get("scene", "unknown")
+        duration = analysis.get("analysis_duration_seconds", 0)
+        num_objects = len(analysis.get("analysis", {}))
+
+        self.app_logger.info("=" * 60)
+        self.app_logger.info(f"VISION ANALYSIS | Scene: {scene} | Duration: {duration:.2f}s")
+        self.app_logger.info(f"Objects analyzed: {num_objects}")
+
+        # Log each object's analysis
+        for obj_name, obj_analysis in analysis.get("analysis", {}).items():
+            needs_rotation = obj_analysis.get("needs_rotation", "unknown")
+            can_approach = obj_analysis.get("can_approach_from_above", "N/A")
+            self.app_logger.info(f"  {obj_name}: rotation={needs_rotation}, approach={can_approach}")
+
+        self.app_logger.info(f"Results saved to: {filepath}")
+        self.app_logger.info("=" * 60)
+
+        # Save to JSON file
+        with open(filepath, 'w') as f:
+            json.dump(analysis, f, indent=2)
+
     # ============== Console-only Methods ==============
 
     def console_info(self, message: str):

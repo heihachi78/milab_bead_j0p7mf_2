@@ -1,9 +1,9 @@
 """
-Vision analysis module for gripper rotation guidance.
+Vision analysis module for gripper rotation guidance and approach feasibility.
 
-Uses a vision-language model (BLIP or BLIP2) to analyze scene panoramas
-and determine if the gripper needs to be rotated from its default downward
-orientation to successfully grasp each object.
+Uses a vision-language model (BLIP or BLIP2) to analyze scene panoramas and provide:
+1. Whether the gripper needs to be rotated from its default downward orientation
+2. Whether the gripper can clearly approach each object from above without obstruction
 
 Returns simple yes/no guidance per object - no geometric calculations.
 Model outputs are logged to JSON for inspection.
@@ -16,24 +16,25 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 from PIL import Image
 
+# Set tokenizers parallelism before importing transformers to avoid fork warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from .config import (
     VISION_MODEL_NAME,
     VISION_MODEL_DEVICE,
     VISION_ANALYSIS_LOG_DIR,
     VISION_ANALYSIS_CACHE_DIR,
-    CAMERA_YAW_ANGLES,
-    CAMERA_PITCH_ANGLES,
-    CAMERA_IMAGE_WIDTH,
-    CAMERA_IMAGE_HEIGHT,
-    CAMERA_DISTANCE,
-    CAMERA_TARGET_POSITION,
-    CAMERA_FOV
+    VISION_APPROACH_ANALYSIS_ENABLED,
 )
 
 
 class VisionAnalyzer:
     """
-    Analyzes scene panoramas to determine gripper orientations and detect occlusions.
+    Analyzes scene panoramas to determine gripper orientations and approach feasibility.
+
+    Provides vision-based analysis for:
+    - Gripper rotation requirements for grasping objects
+    - Whether objects can be approached from above without obstruction
     """
 
     def __init__(self, logger=None):
@@ -58,7 +59,7 @@ class VisionAnalyzer:
 
         try:
             if self.logger:
-                self.logger.console_info(f"Initializing vision model: {VISION_MODEL_NAME}")
+                self.logger.log_app_info(f"Initializing vision model: {VISION_MODEL_NAME}")
 
             import torch
 
@@ -69,6 +70,7 @@ class VisionAnalyzer:
                     VISION_MODEL_NAME,
                     cache_dir=VISION_ANALYSIS_CACHE_DIR
                 )
+                # Load BLIP2 model
                 self.model = Blip2ForConditionalGeneration.from_pretrained(
                     VISION_MODEL_NAME,
                     cache_dir=VISION_ANALYSIS_CACHE_DIR,
@@ -93,7 +95,7 @@ class VisionAnalyzer:
             self._model_initialized = True
 
             if self.logger:
-                self.logger.console_info(f"Vision model initialized on {self.device}")
+                self.logger.log_app_info(f"Vision model initialized on {self.device}")
 
         except Exception as e:
             if self.logger:
@@ -120,7 +122,7 @@ class VisionAnalyzer:
         start_time = datetime.now()
 
         if self.logger:
-            self.logger.console_info("Starting vision analysis...")
+            self.logger.log_app_info("Starting vision analysis...")
 
         try:
             # Initialize model if not already done
@@ -133,7 +135,7 @@ class VisionAnalyzer:
             analysis_results = {}
             for obj_name, obj_data in object_info.items():
                 if self.logger:
-                    self.logger.console_info(f"  Analyzing object: {obj_name}")
+                    self.logger.log_app_info(f"  Analyzing object: {obj_name}")
 
                 obj_analysis = self._analyze_object(
                     panorama_image,
@@ -161,8 +163,7 @@ class VisionAnalyzer:
             log_path = self._save_analysis_to_log(full_analysis)
 
             if self.logger:
-                self.logger.console_info(f"Vision analysis completed in {duration:.2f}s")
-                self.logger.console_info(f"Analysis saved to: {log_path}")
+                self.logger.log_app_info(f"Vision analysis completed in {duration:.2f}s")
 
             return full_analysis
 
@@ -201,13 +202,24 @@ class VisionAnalyzer:
         position = obj_data.get("position", [0, 0, 0])
         dimensions = obj_data.get("dimensions", [0.05, 0.05, 0.05])
 
-        # Use vision model to analyze the object
+        # Analyze gripper rotation requirement
         vision_analysis = self._analyze_object_grippability(
             panorama_image,
             obj_name,
             position,
             dimensions
         )
+
+        # Analyze approach feasibility if enabled
+        if VISION_APPROACH_ANALYSIS_ENABLED:
+            approach_analysis = self._analyze_object_approach_feasibility(
+                panorama_image,
+                obj_name,
+                position,
+                dimensions
+            )
+            # Merge approach analysis into results
+            vision_analysis.update(approach_analysis)
 
         return vision_analysis
 
@@ -228,7 +240,7 @@ class VisionAnalyzer:
             dimensions: [width, depth, height] in meters
 
         Returns:
-            Dictionary with 'needs_rotation' (yes/no) and 'reason' (explanation)
+            Dictionary with 'needs_rotation' (yes/no)
         """
         import torch
 
@@ -240,8 +252,75 @@ class VisionAnalyzer:
         # Fill in the object name
         prompt = prompt_template.format(object_name=obj_name)
 
-        if self.logger:
-            self.logger.console_info(f"    Querying model for gripper rotation requirement")
+        # Process image and prompt
+        inputs = self.processor(
+            images=panorama_image,
+            text=prompt,
+            return_tensors="pt"
+        ).to(self.device)
+
+        # Generate response with parameters optimized for simple yes/no answers
+        with torch.no_grad():
+            generated_ids = self.model.generate(
+                **inputs,
+                max_new_tokens=10,  # Short responses
+                num_beams=3,  # Fewer beams for simple answers
+                do_sample=False,  # Use beam search, not sampling
+                early_stopping=True
+            )
+
+        # Decode the response
+        response = self.processor.decode(generated_ids[0], skip_special_tokens=True)
+        response = response.strip()
+
+        # Parse response into yes/no
+        # Note: Question asks "Does the object have another cube directly touching its side?"
+        # So YES means cube touching side (needs rotation), NO means no side contact (no rotation)
+        response_lower = response.lower()
+
+        # Determine yes or no (direct logic)
+        if response_lower.startswith('yes'):
+            needs_rotation = "yes"  # Yes cube touching side = needs rotation
+        elif response_lower.startswith('no'):
+            needs_rotation = "no"  # No cube touching side = no rotation needed
+        else:
+            # If model doesn't start with yes/no, try to extract it
+            needs_rotation = "yes" if "yes" in response_lower else "no"
+
+        result = {
+            "needs_rotation": needs_rotation
+        }
+
+        return result
+
+    def _analyze_object_approach_feasibility(
+        self,
+        panorama_image: Image.Image,
+        obj_name: str,
+        position: List[float],
+        dimensions: List[float]
+    ) -> Dict:
+        """
+        Use vision model to determine if gripper can approach from above.
+
+        Args:
+            panorama_image: PIL Image of the panorama
+            obj_name: Name of the object
+            position: [x, y, z] position in world coordinates
+            dimensions: [width, depth, height] in meters
+
+        Returns:
+            Dictionary with 'can_approach_from_above' (yes/no)
+        """
+        import torch
+
+        # Load prompt template
+        prompt_path = os.path.join("prompts", "vision_gripper_approach.txt")
+        with open(prompt_path, 'r') as f:
+            prompt_template = f.read().strip()
+
+        # Fill in the object name
+        prompt = prompt_template.format(object_name=obj_name)
 
         # Process image and prompt
         inputs = self.processor(
@@ -250,48 +329,43 @@ class VisionAnalyzer:
             return_tensors="pt"
         ).to(self.device)
 
-        # Generate response
+        # Generate response with parameters optimized for simple yes/no answers
         with torch.no_grad():
             generated_ids = self.model.generate(
                 **inputs,
-                max_length=50,
-                num_beams=3,
-                temperature=0.7
+                max_new_tokens=10,  # Short responses
+                num_beams=3,  # Fewer beams for simple answers
+                do_sample=False,  # Use beam search, not sampling
+                early_stopping=True
             )
 
         # Decode the response
         response = self.processor.decode(generated_ids[0], skip_special_tokens=True)
         response = response.strip()
 
-        # Parse response into yes/no and reason
+        # Parse response into yes/no
+        # Note: Question asks "Is the object at the very top of the stack?"
+        # So YES means clear (can approach), NO means blocked (can't approach)
         response_lower = response.lower()
 
-        # Determine yes or no
+        # Determine yes or no (direct logic)
         if response_lower.startswith('yes'):
-            needs_rotation = "yes"
-            reason = response[3:].strip().lstrip(',.:;-').strip()
+            can_approach = "yes"  # Yes it's at the top = can approach
         elif response_lower.startswith('no'):
-            needs_rotation = "no"
-            reason = response[2:].strip().lstrip(',.:;-').strip()
+            can_approach = "no"  # No it's not at the top = can't approach
         else:
             # If model doesn't start with yes/no, try to extract it
-            needs_rotation = "yes" if "yes" in response_lower else "no"
-            reason = response
+            can_approach = "yes" if "yes" in response_lower else "no"
 
         result = {
-            "needs_rotation": needs_rotation,
-            "reason": reason if reason else response
+            "can_approach_from_above": can_approach
         }
-
-        if self.logger:
-            self.logger.console_info(f"      Rotation needed: {needs_rotation}")
-            self.logger.console_info(f"      Reason: {reason if reason else response}")
 
         return result
 
     def _save_analysis_to_log(self, analysis: Dict) -> str:
         """
-        Save analysis results to a JSON log file.
+        Save analysis results to a JSON log file using the logger.
 
         Args:
             analysis: Analysis results dictionary
@@ -303,7 +377,11 @@ class VisionAnalyzer:
         filename = f"vision_analysis_{timestamp}.json"
         filepath = os.path.join(VISION_ANALYSIS_LOG_DIR, filename)
 
-        with open(filepath, 'w') as f:
-            json.dump(analysis, f, indent=2)
+        if self.logger:
+            self.logger.log_vision_analysis(analysis, filepath)
+        else:
+            # Fallback if no logger available
+            with open(filepath, 'w') as f:
+                json.dump(analysis, f, indent=2)
 
         return filepath
