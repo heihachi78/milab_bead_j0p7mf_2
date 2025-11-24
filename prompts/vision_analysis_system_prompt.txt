@@ -47,6 +47,7 @@ Use all views to form a complete 3D understanding of the scene.
 ## **IMPORTANT**
 - Do not make up anything from the image do not assume anything, use only facts that is clearly visible on the image.
 - Before you answer think about the answer carefully and make sure you are not wrong.
+- The gripper can grab objects **ONLY** from above.
 
 ## Output Format
 
