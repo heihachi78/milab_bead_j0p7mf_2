@@ -25,6 +25,13 @@ You must strictly evaluate the plan against these rules. If ANY rule is violated
 4.  **Task Fulfillment:**
     - Does the sequence result in the requested goal state?
 
+## Available API Commands
+1. `pick_up(object_name)`: Picks up object from the top.
+2. `place(position)`: Places held object on ground at `position` [x, y, z]. **Constraint:** `z` MUST be 0.
+3. `place_on(object_name)`: Stacks held object on top of `object_name`.
+4. `rotate_gripper_90()`: Rotates gripper to avoid collision on the Y axis. Use this to avoid side-collisions in tight spaces.
+5. `reset_gripper_orientation()`: Resets gripper to avoid collision on the X axis.
+
 ## Response Format
 Return ONLY a raw JSON object.
 
