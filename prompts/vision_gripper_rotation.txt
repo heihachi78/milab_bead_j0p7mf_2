@@ -1,1 +1,0 @@
-Does the {object_name} have another cube directly touching its side?
