@@ -200,7 +200,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "rotate_gripper_90",
-                "description": "Use this function to rotate the gripper 90 degrees around the Z axis to avoid hitting nearby object with the wide part of the gripper.",
+                "description": "Use this to avoid hitting close objects with the gripper's wide part along the Y axis during pick up and place operations.",
                 "input_schema": {
                     "type": "object",
                     "properties": {},
@@ -209,7 +209,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "reset_gripper_orientation",
-                "description": "Use this function to rotate the gripper around the Z axis back to the original position. This helps to avoid hitting nearby object with the wide part of the gripper.",
+                "description": "Use this to avoid hitting close objects with the gripper's wide part along the X axis during pick up and place operations.",
                 "input_schema": {
                     "type": "object",
                     "properties": {},
@@ -232,7 +232,7 @@ Available objects in the scene can be queried using get_all_objects tool."""
             },
             {
                 "name": "place_object",
-                "description": "Place the held object at specific coordinates (approach, descend, release, retract). Does NOT avoid obstacles.",
+                "description": "Place the held object at specific coordinates (approach, descend, release, retract).  Does NOT avoid obstacles.",
                 "input_schema": {
                     "type": "object",
                     "properties": {
