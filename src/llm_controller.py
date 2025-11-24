@@ -1,8 +1,6 @@
 import os
-import json
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from anthropic import Anthropic
+from typing import Dict, Any
 
 
 class LLMController:
@@ -16,13 +14,12 @@ class LLMController:
             object_manager: ObjectManager instance for querying object positions
             robot_controller: RobotController instance for executing commands
             logger: SimulationLogger instance for logging (optional)
-            anthropic_client: Anthropic API client for collision prediction (optional)
+            anthropic_client: Anthropic API client (optional)
         """
         self.object_manager = object_manager
         self.robot_controller = robot_controller
         self.logger = logger
         self.anthropic_client = anthropic_client
-        self.completed_steps = []  # Track completed steps for replanning
 
     def _load_file(self, filename: str) -> str:
         """
@@ -85,80 +82,9 @@ class LLMController:
         if self.logger:
             self.logger.app_logger.info(f"Executing plan with {len(commands)} commands")
 
-        # Initialize collision checker if enabled
-        from src.config import ENABLE_COLLISION_PREDICTION
-        collision_checker = None
-        if ENABLE_COLLISION_PREDICTION and self.anthropic_client and self.logger:
-            from src.collision_checker import CollisionChecker
-            collision_checker = CollisionChecker(
-                self.anthropic_client,
-                self.object_manager,
-                self.robot_controller,
-                self.logger
-            )
-            self.logger.console_info("Collision prediction enabled")
-
-        # Reset completed steps tracker
-        self.completed_steps = []
-
-        # Execute commands with collision checking
-        i = 0
-        while i < len(commands):
-            command = commands[i]
+        # Execute commands
+        for i, command in enumerate(commands):
             action = command.get('action')
-
-            # Collision check before execution
-            if collision_checker:
-                current_state = self._get_current_state()
-                collision_result = collision_checker.check_step_collision(command, current_state)
-
-                if collision_result.will_collide:
-                    if self.logger:
-                        self.logger.console_warning(
-                            f"Step {i+1}: Collision detected for {action} - {collision_result.reasoning}"
-                        )
-
-                    # Attempt replan
-                    new_plan = self._replan_for_collision(
-                        task_description,
-                        self.completed_steps,
-                        command,
-                        collision_result
-                    )
-
-                    if new_plan:
-                        # Check if first step of new plan also collides
-                        recheck_state = self._get_current_state()
-                        recheck_result = collision_checker.check_step_collision(new_plan[0], recheck_state)
-
-                        if recheck_result.will_collide:
-                            if self.logger:
-                                self.logger.console_error(
-                                    f"Replanned step still causes collision: {recheck_result.reasoning}"
-                                )
-                                self.logger.console_error("Stopping execution - collision unavoidable")
-                            return {
-                                "status": "failed",
-                                "reason": "unavoidable_collision",
-                                "details": recheck_result.reasoning
-                            }
-                        else:
-                            # Replace remaining commands with new plan
-                            if self.logger:
-                                self.logger.console_success("New collision-free plan generated, continuing execution")
-                            commands = self.completed_steps + new_plan
-                            i = len(self.completed_steps)  # Resume from where we left off
-                            continue
-                    else:
-                        if self.logger:
-                            self.logger.console_error("Replanning failed - stopping execution")
-                        return {
-                            "status": "failed",
-                            "reason": "replan_failed",
-                            "details": "Could not generate alternative plan"
-                        }
-
-            # Execute command (existing code)
 
             if action == 'pick_up':
                 object_name = command.get('object')
@@ -200,206 +126,8 @@ class LLMController:
             else:
                 raise ValueError(f"Command {i+1}: Unknown action '{action}'")
 
-            # Track completed step
-            self.completed_steps.append(command)
-            i += 1
-
         # All commands executed successfully
         if self.logger:
             self.logger.console_success(f"Plan execution completed successfully: {len(commands)} steps")
 
         return {"status": "success", "steps_completed": len(commands)}
-
-    def _get_current_state(self) -> Dict[str, Any]:
-        """
-        Capture complete current state for collision checking.
-
-        Returns:
-            Dictionary containing all objects, gripper state, and holding status
-        """
-        objects_info = []
-        for name, obj_id in self.object_manager.objects.items():
-            try:
-                position = self.object_manager.get_object_center_position(name)
-                dimensions = self.object_manager.get_object_dimensions(obj_id)
-                color = self.object_manager.object_colors.get(name, [1, 1, 1, 1])
-                objects_info.append({
-                    "name": name,
-                    "position": position,
-                    "dimensions": dimensions,
-                    "color": color
-                })
-            except Exception as e:
-                if self.logger:
-                    self.logger.app_logger.warning(f"Could not get state for object {name}: {e}")
-
-        # Get gripper state
-        gripper_position = self.robot_controller.get_end_effector_position()
-        gripper_orientation = self.robot_controller.orn
-        gripper_state = "open" if self.robot_controller.current_gripper_pos > 0.02 else "closed"
-
-        # Determine gripper width based on orientation (simplified)
-        # Default orientation: 0.1m wide, rotated: 0.05m wide
-        gripper_width = 0.1  # This could be improved by checking actual orientation
-
-        return {
-            "objects": objects_info,
-            "gripper": {
-                "position": gripper_position,
-                "orientation": gripper_orientation,
-                "state": gripper_state,
-                "width": gripper_width
-            },
-            "holding_object": getattr(self.robot_controller, 'holding_object', None),
-            "completed_actions": self.completed_steps.copy()
-        }
-
-    def _replan_for_collision(
-        self,
-        task_description: str,
-        completed_steps: List[Dict[str, Any]],
-        problematic_step: Dict[str, Any],
-        collision_result
-    ) -> Optional[List[Dict[str, Any]]]:
-        """
-        Call LLM to generate new plan avoiding collision.
-
-        Args:
-            task_description: Original task description
-            completed_steps: List of successfully completed commands
-            problematic_step: The command that would cause collision
-            collision_result: CollisionResult with details
-
-        Returns:
-            New plan as list of commands, or None if replanning failed
-        """
-        if not self.anthropic_client:
-            if self.logger:
-                self.logger.app_logger.error("Cannot replan: No Anthropic client available")
-            return None
-
-        try:
-            # Load replan prompts
-            system_prompt = self._load_file('collision_replan_system_prompt.txt')
-            user_prompt_template = self._load_file('collision_replan_user_prompt.txt')
-
-            # Get current state
-            current_state = self._get_current_state()
-
-            # Format objects info
-            objects_str = "\n".join([
-                f"  - {obj['name']}: position {obj['position']}, dimensions {obj['dimensions']}"
-                for obj in current_state['objects']
-            ])
-
-            # Format completed steps
-            completed_str = "\n".join([
-                f"  {i+1}. {step.get('action')} {step.get('object', step.get('position', ''))}"
-                for i, step in enumerate(completed_steps)
-            ]) if completed_steps else "  (none - this is the first step)"
-
-            # Format gripper state
-            gripper = current_state['gripper']
-            gripper_str = f"Position: {gripper['position']}, State: {gripper['state']}, Orientation: {gripper['orientation']}"
-
-            # Format problematic step
-            problematic_str = f"{problematic_step.get('action')} {problematic_step.get('object', problematic_step.get('position', ''))}"
-
-            # Fill user prompt template
-            user_prompt = user_prompt_template.format(
-                task_description=task_description,
-                completed_steps=completed_str,
-                problematic_step=problematic_str,
-                collision_details=collision_result.reasoning,
-                affected_objects=", ".join(collision_result.affected_objects) if collision_result.affected_objects else "unknown",
-                objects_info=objects_str,
-                gripper_state=gripper_str,
-                holding_object=current_state['holding_object'] or "none"
-            )
-
-            if self.logger:
-                self.logger.app_logger.info("Requesting replan from LLM due to collision")
-
-            # Call LLM
-            from src.config import COLLISION_CHECK_MODEL, ENABLE_PROMPT_CACHING
-            import os
-
-            model = COLLISION_CHECK_MODEL or os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-5-20250929')
-
-            if ENABLE_PROMPT_CACHING:
-                response = self.anthropic_client.messages.create(
-                    model=model,
-                    max_tokens=2048,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system_prompt,
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ],
-                    messages=[{"role": "user", "content": user_prompt}]
-                )
-            else:
-                response = self.anthropic_client.messages.create(
-                    model=model,
-                    max_tokens=2048,
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}]
-                )
-
-            # Log API call
-            if self.logger:
-                self.logger.log_api_call(
-                    stage="collision_replan",
-                    request={"system": system_prompt[:100] + "...", "user": user_prompt[:200] + "..."},
-                    response=response.content[0].text,
-                    usage=response.usage
-                )
-
-            # Parse response using robust JSON extraction
-            response_text = response.content[0].text
-
-            # Try to extract JSON from markdown code blocks if present
-            if "```json" in response_text:
-                json_start = response_text.find("```json") + 7
-                json_end = response_text.find("```", json_start)
-                json_str = response_text[json_start:json_end].strip()
-            elif "```" in response_text:
-                json_start = response_text.find("```") + 3
-                json_end = response_text.find("```", json_start)
-                json_str = response_text[json_start:json_end].strip()
-            else:
-                # Find first { and matching }
-                json_str = response_text.strip()
-                if json_str.startswith('{'):
-                    # Count braces to find the end of the JSON object
-                    brace_count = 0
-                    for i, char in enumerate(json_str):
-                        if char == '{':
-                            brace_count += 1
-                        elif char == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                # Found the end of the JSON object
-                                json_str = json_str[:i+1]
-                                break
-                else:
-                    if self.logger:
-                        self.logger.app_logger.error("No JSON found in replan response")
-                    return None
-
-            plan_data = json.loads(json_str)
-
-            new_plan = plan_data.get('plan', [])
-
-            if self.logger:
-                self.logger.console_success(f"Generated new plan with {len(new_plan)} steps")
-                if 'explanation' in plan_data:
-                    self.logger.app_logger.info(f"Replan explanation: {plan_data['explanation']}")
-
-            return new_plan
-
-        except Exception as e:
-            if self.logger:
-                self.logger.app_logger.error(f"Replanning failed: {e}")
-            return None

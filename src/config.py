@@ -143,7 +143,8 @@ INTERACTIVE_SYSTEM_PROMPT_FILE = 'interactive_system_prompt.txt'  # System promp
 ENABLE_PROMPT_CACHING = True  # Enable/disable prompt caching for system prompt and tools
 PROMPT_CACHE_TTL = None  # None = 5 minutes (default), "1h" = 1 hour (costs 2x for cache writes)
 
-# Collision prediction settings (new feature)
-ENABLE_COLLISION_PREDICTION = True  # Enable/disable collision prediction before executing each step
-COLLISION_CHECK_MODEL = None  # None = use same model as ANTHROPIC_MODEL from .env
-COLLISION_CHECK_CACHE_TTL = 300  # Cache TTL for collision check prompts (seconds)
+# Verification settings (for batch mode)
+ENABLE_VERIFICATION = True  # Enable/disable post-execution task verification
+VERIFICATION_MAX_TOKENS = 2048  # Max tokens for verification LLM response
+VERIFICATION_SYSTEM_PROMPT_FILE = 'verification_system_prompt.txt'  # System prompt file for verification
+VERIFICATION_USER_PROMPT_FILE = 'verification_user_prompt.txt'  # User prompt template for verification

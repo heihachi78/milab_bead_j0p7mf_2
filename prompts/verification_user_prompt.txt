@@ -1,0 +1,21 @@
+## Task to Verify
+
+{task_description}
+
+## Execution Status
+
+Status: {execution_status}
+
+## Executed Plan
+
+{executed_plan}
+
+## Current Object Positions and Properties
+
+{objects_info}
+
+## Your Task
+
+Analyze the panorama image showing the final state of the scene and the object position data provided above. Determine whether the task goal has been satisfied.
+
+Respond with ONLY a JSON object following the exact format specified in the system prompt. Do not include any additional text or markdown formatting.

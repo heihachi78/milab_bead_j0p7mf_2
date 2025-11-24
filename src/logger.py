@@ -145,7 +145,7 @@ class SimulationLogger:
             system_prompt: System prompt text
             user_prompt: User prompt text
             model: Model name
-            stage: Optional stage identifier (e.g., "SIMPLIFIED_PLANNING", "collision_check")
+            stage: Optional stage identifier (e.g., "SIMPLIFIED_PLANNING", "interactive")
         """
         self.llm_logger.info("=" * 80)
         stage_info = f" | Stage: {stage}" if stage else ""
@@ -573,10 +573,10 @@ class SimulationLogger:
 
     def log_api_call(self, stage: str, request: Dict[str, Any], response: str, usage: Any):
         """
-        Log a simple API call (for collision checking and replanning).
+        Log a simple API call.
 
         Args:
-            stage: Stage identifier (e.g., "collision_check", "collision_replan")
+            stage: Stage identifier (e.g., "interactive", "tool_call")
             request: Request summary dict
             response: Response text
             usage: Usage object from API response

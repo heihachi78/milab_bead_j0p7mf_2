@@ -46,6 +46,10 @@ class LLMValidator:
         self.simplified_system_prompt = self._load_file('simplified_system_prompt.txt')
         self.simplified_user_prompt = self._load_file('simplified_user_prompt.txt')
 
+        # Load verification prompt templates (lazy loaded to avoid errors if not present)
+        self.verification_system_prompt = None
+        self.verification_user_prompt = None
+
     def _load_file(self, filename: str) -> str:
         """Load text file content from prompts folder."""
         filepath = Path(__file__).parent.parent / 'prompts' / filename
@@ -355,3 +359,192 @@ class LLMValidator:
                 for error in errors:
                     self.logger.console_error(f"  - {error}")
             return plan, False, {"errors": errors}
+
+    def verify_task_completion(
+        self,
+        task_description: str,
+        original_plan: Dict[str, Any],
+        execution_result: Dict[str, Any],
+        panorama_path: str
+    ) -> Dict[str, Any]:
+        """
+        Verify if the task has been satisfied after execution completes or fails.
+
+        This method uses the LLM to analyze the final state of the scene and determine
+        if the task goal has been achieved. It compares the actual object positions
+        against the task requirements.
+
+        Args:
+            task_description: The original task description
+            original_plan: The plan that was executed (dict with 'reasoning' and 'commands')
+            execution_result: Result from execute_plan() (dict with 'status' and other fields)
+            panorama_path: Path to the post-execution panorama image
+
+        Returns:
+            Dictionary with verification result:
+            {
+                "task_satisfied": bool,
+                "reasoning": str,
+                "actual_state": str,
+                "expected_state": str,
+                "discrepancies": list[str] or None
+            }
+            On error, returns:
+            {
+                "task_satisfied": None,
+                "reasoning": "Verification failed: <error message>",
+                "actual_state": "Unknown",
+                "expected_state": "Unknown",
+                "discrepancies": None
+            }
+        """
+        # Lazy load verification prompts if not already loaded
+        if self.verification_system_prompt is None:
+            try:
+                self.verification_system_prompt = self._load_file(
+                    config.VERIFICATION_SYSTEM_PROMPT_FILE
+                )
+                self.verification_user_prompt = self._load_file(
+                    config.VERIFICATION_USER_PROMPT_FILE
+                )
+            except Exception as e:
+                error_msg = f"Failed to load verification prompts: {str(e)}"
+                if self.logger:
+                    self.logger.log_app_error(error_msg)
+                    self.logger.console_error(error_msg)
+                return {
+                    "task_satisfied": None,
+                    "reasoning": f"Verification failed: {error_msg}",
+                    "actual_state": "Unknown",
+                    "expected_state": "Unknown",
+                    "discrepancies": None
+                }
+
+        if self.logger:
+            self.logger.console_info("Verifying task completion...")
+
+        try:
+            # Build current objects info
+            objects_info = self._build_objects_info()
+
+            # Encode panorama image
+            image_data = self._encode_image(panorama_path)
+            media_type = self._get_image_media_type(panorama_path)
+
+            # Format executed plan as JSON string
+            executed_plan_str = json.dumps(original_plan, indent=2)
+
+            # Get execution status string
+            execution_status = execution_result.get("status", "unknown")
+            if execution_status == "failed":
+                execution_status += f" - {execution_result.get('reason', 'Unknown reason')}"
+
+            # Format user prompt (verification_user_prompt is guaranteed to be str at this point)
+            assert self.verification_user_prompt is not None, "Verification user prompt should be loaded"
+            user_prompt_text = self.verification_user_prompt.format(
+                task_description=task_description,
+                executed_plan=executed_plan_str,
+                execution_status=execution_status,
+                objects_info=objects_info
+            )
+
+            # Prepare system prompt with caching
+            system_with_cache = [
+                {
+                    "type": "text",
+                    "text": self.verification_system_prompt,
+                    "cache_control": {"type": "ephemeral"}  # Cache system prompt
+                }
+            ]
+
+            # Prepare user message with panorama image and text
+            user_message_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": image_data
+                    },
+                    "cache_control": {"type": "ephemeral"}  # Cache panorama image
+                },
+                {
+                    "type": "text",
+                    "text": user_prompt_text
+                }
+            ]
+
+            # Log LLM request
+            if self.logger:
+                self.logger.log_llm_request(
+                    self.verification_system_prompt,
+                    user_prompt_text,
+                    self.model,
+                    stage="VERIFICATION"
+                )
+
+            # Call Anthropic API
+            verification_max_tokens = config.VERIFICATION_MAX_TOKENS if hasattr(config, 'VERIFICATION_MAX_TOKENS') else 2048
+
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=verification_max_tokens,
+                system=system_with_cache,  # type: ignore
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user_message_content
+                    }
+                ]
+            )
+
+            # Extract text from response
+            response_text = ""
+            for block in response.content:
+                if block.type == "text":
+                    response_text += block.text
+
+            # Extract token usage (including cache metrics)
+            input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+            output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+            cache_creation_tokens = (response.usage.cache_creation_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_creation_input_tokens') else 0
+            cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
+
+            # Log LLM response
+            if self.logger:
+                self.logger.log_llm_response(
+                    response_text,
+                    self.model,
+                    input_tokens,
+                    output_tokens,
+                    stage="VERIFICATION",
+                    cache_creation_tokens=cache_creation_tokens,
+                    cache_read_tokens=cache_read_tokens
+                )
+
+            # Parse JSON response
+            verification_result = self._parse_json_response(response_text)
+
+            # Validate response structure
+            required_fields = ["task_satisfied", "reasoning", "actual_state", "expected_state"]
+            for field in required_fields:
+                if field not in verification_result:
+                    raise ValueError(f"Verification response missing required field: {field}")
+
+            if self.logger:
+                self.logger.console_success("Verification complete")
+
+            return verification_result
+
+        except Exception as e:
+            error_msg = f"Verification error: {str(e)}"
+            if self.logger:
+                self.logger.log_app_error(error_msg)
+                self.logger.console_error(error_msg)
+            return {
+                "task_satisfied": None,
+                "reasoning": f"Verification failed: {str(e)}",
+                "actual_state": "Unknown",
+                "expected_state": "Unknown",
+                "discrepancies": None
+            }

@@ -190,22 +190,98 @@ if not commands or len(commands) == 0:
 # Execute the validated plan
 logger.console_info("Executing validated plan...")
 logger.console_info(f"Plan contains {len(commands)} command(s)")
-execution_result = llm_controller.execute_plan(validated_plan, task_description)
 
-# Check execution result
-if execution_result["status"] == "failed":
+# Execute plan and handle both success and failure cases
+execution_result = None
+execution_failed_with_exception = False
+exception_message = ""
+
+try:
+    execution_result = llm_controller.execute_plan(validated_plan, task_description)
+except Exception as e:
+    # Execution failed with exception - create a failure result
+    execution_failed_with_exception = True
+    exception_message = str(e)
+    execution_result = {
+        "status": "failed",
+        "reason": "Execution raised exception",
+        "details": exception_message,
+        "steps_completed": 0
+    }
     logger.console_error("=" * 80)
-    logger.console_error("EXECUTION FAILED")
+    logger.console_error("EXECUTION FAILED WITH EXCEPTION")
     logger.console_error("=" * 80)
-    logger.console_error(f"Reason: {execution_result['reason']}")
-    if "details" in execution_result:
-        logger.console_error(f"Details: {execution_result['details']}")
+    logger.console_error(f"Exception: {exception_message}")
     logger.console_error("=" * 80)
-else:
-    logger.console_success("=" * 80)
-    logger.console_success("EXECUTION COMPLETED SUCCESSFULLY")
-    logger.console_success(f"Completed {execution_result['steps_completed']} steps")
-    logger.console_success("=" * 80)
+
+# Check execution result (if didn't fail with exception)
+if not execution_failed_with_exception:
+    if execution_result["status"] == "failed":
+        logger.console_error("=" * 80)
+        logger.console_error("EXECUTION FAILED")
+        logger.console_error("=" * 80)
+        logger.console_error(f"Reason: {execution_result['reason']}")
+        if "details" in execution_result:
+            logger.console_error(f"Details: {execution_result['details']}")
+        logger.console_error("=" * 80)
+    else:
+        logger.console_success("=" * 80)
+        logger.console_success("EXECUTION COMPLETED SUCCESSFULLY")
+        logger.console_success(f"Completed {execution_result['steps_completed']} steps")
+        logger.console_success("=" * 80)
+
+# Post-execution verification (if enabled)
+if ENABLE_VERIFICATION and execution_result is not None:
+    logger.console_info("")
+    logger.console_info("=" * 80)
+    logger.console_info("POST-EXECUTION VERIFICATION")
+    logger.console_info("=" * 80)
+
+    # Capture post-execution panorama
+    logger.console_info("Capturing post-execution panorama...")
+    post_execution_panorama = camera_manager.capture_and_save_panorama("post_execution")
+    logger.console_info(f"Post-execution panorama saved: {post_execution_panorama}")
+
+    # Run verification
+    verification_result = llm_validator.verify_task_completion(
+        task_description=task_description,
+        original_plan=validated_plan,
+        execution_result=execution_result,
+        panorama_path=post_execution_panorama
+    )
+
+    # Display verification results
+    logger.console_info("")
+    logger.console_info("Verification Results:")
+    logger.console_info("-" * 80)
+
+    task_satisfied = verification_result.get("task_satisfied")
+
+    if task_satisfied is None:
+        # Verification failed
+        logger.console_error(f"Status: VERIFICATION ERROR")
+        logger.console_error(f"Message: {verification_result.get('reasoning', 'Unknown error')}")
+    elif task_satisfied:
+        # Task satisfied
+        logger.console_success(f"Status: TASK SATISFIED ✓")
+        logger.console_success(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
+        logger.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
+        logger.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
+    else:
+        # Task not satisfied
+        logger.console_warning(f"Status: TASK NOT SATISFIED ✗")
+        logger.console_warning(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
+        logger.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
+        logger.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
+
+        discrepancies = verification_result.get("discrepancies")
+        if discrepancies:
+            logger.console_warning("Discrepancies:")
+            for discrepancy in discrepancies:
+                logger.console_warning(f"  - {discrepancy}")
+
+    logger.console_info("=" * 80)
+    logger.console_info("")
 
 '''
 robot_controller.pick_up('purple_cube')
