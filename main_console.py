@@ -12,6 +12,8 @@ import sys
 import glob
 import argparse
 import base64
+import time
+import select
 from io import BytesIO
 from PIL import Image
 from datetime import datetime
@@ -159,6 +161,38 @@ def save_panorama(panorama_base64, session_name="console"):
         return None
 
 
+def get_input_with_simulation():
+    """
+    Get user input while continuously stepping the simulation.
+    Uses non-blocking select() to check for input while running physics.
+
+    The terminal is in line-buffered mode, so we step the simulation until
+    the user presses Enter, then read the complete line.
+
+    Returns:
+        str: User input string, or raises EOFError if interrupted
+    """
+    print("\nYou: ", end="", flush=True)
+
+    while True:
+        # Check if input is available (non-blocking)
+        # select() with timeout=0 returns immediately
+        readable, _, _ = select.select([sys.stdin], [], [], 0)
+
+        if readable:
+            # Input is available (user pressed Enter), read the complete line
+            line = sys.stdin.readline()
+            if line == '':
+                # EOF (Ctrl+D)
+                raise EOFError()
+            # Remove trailing newline and return
+            return line.rstrip('\n')
+        else:
+            # No input available, step simulation
+            p.stepSimulation()
+            time.sleep(TIME_STEP)  # Maintain consistent physics rate
+
+
 def initialize_simulation(scene_name, logger):
     """Initialize PyBullet simulation and all components."""
     logger.console_info(f"Initializing console simulation with scene: {scene_name}...")
@@ -271,9 +305,9 @@ def main():
     # Main chat loop
     try:
         while True:
-            # Get user input
+            # Get user input with continuous simulation
             try:
-                user_input = input("\nYou: ").strip()
+                user_input = get_input_with_simulation().strip()
             except EOFError:
                 print("\n\nExiting...")
                 break
