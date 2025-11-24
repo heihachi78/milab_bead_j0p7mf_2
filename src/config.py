@@ -2,8 +2,8 @@
 Configuration file for robot simulation parameters.
 
 This module contains all centralized configuration values for the PyBullet
-robotics simulation including robot parameters, physics settings, object
-positions, movement thresholds, and camera configuration.
+robotics simulation including robot parameters, physics settings, movement
+thresholds, and camera configuration.
 """
 
 # Robot configuration

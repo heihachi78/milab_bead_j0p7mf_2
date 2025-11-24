@@ -58,9 +58,9 @@ class LLMValidator:
 
     def _encode_image(self, image_path: str) -> str:
         """
-        Encode image to base64.
 
-        Note: Currently unused in simplified workflow but kept for potential future use.
+        Note: This method is used by the `verify_task_completion` method.
+
         """
         with open(image_path, 'rb') as f:
             return base64.standard_b64encode(f.read()).decode('utf-8')
@@ -69,7 +69,7 @@ class LLMValidator:
         """
         Determine media type based on file extension.
 
-        Note: Currently unused in simplified workflow but kept for potential future use.
+        Note: This method is used by the `verify_task_completion` method.
         """
         extension = Path(image_path).suffix.lower()
         if extension in ['.jpg', '.jpeg']:
@@ -316,8 +316,7 @@ class LLMValidator:
         2. Receives plan with reasoning and commands from the LLM
         3. Performs local Python validation checks (structure, logic, constraints)
 
-        This replaces the old multi-stage workflow (vision analysis, spatial analysis,
-        planning, review, refinement) with a simpler, faster single-call approach.
+        This replaces the old multi-stage workflow with a simpler, faster single-call approach.
 
         Args:
             task_description: The task to accomplish
