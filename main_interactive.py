@@ -20,6 +20,7 @@ from src.robot_controller import RobotController
 from src.camera_manager import CameraManager
 from src.interactive_llm_controller import InteractiveLLMController
 from src.logger import SimulationLogger
+from src.scene_loader import load_scene, SceneLoadError
 
 
 # Streamlit page configuration
@@ -60,6 +61,17 @@ def initialize_simulation():
     logger = SimulationLogger(log_dir=LOGS_FOLDER, session_name=LOG_SESSION_NAME)
     logger.console_info("Initializing interactive simulation...")
 
+    # Load scene configuration
+    try:
+        scene = load_scene(DEFAULT_SCENE)
+        logger.console_info(f"Loaded scene: {scene.metadata.name}")
+        logger.app_logger.info(f"Scene: {scene.metadata.name} - {scene.metadata.description}")
+        logger.app_logger.info(f"Objects in scene: {', '.join(scene.get_object_names())}")
+    except SceneLoadError as e:
+        logger.console_error(f"Failed to load scene '{DEFAULT_SCENE}': {e}")
+        logger.app_logger.error(f"Failed to load scene '{DEFAULT_SCENE}': {e}")
+        raise
+
     # Connect to PyBullet GUI
     logger.console_info("Starting PyBullet GUI...")
     armId = RobotController.initialize_pybullet(logger=logger)
@@ -76,6 +88,10 @@ def initialize_simulation():
     logger.app_logger.info("Simulation components initialized")
     logger.console_info("Simulation components initialized")
 
+    # Stabilize robot
+    logger.console_info("Stabilizing robot...")
+    robot_controller.stabilize()
+
     # Clear images folder from previous runs
     images_folder = IMAGES_FOLDER
     if os.path.exists(images_folder):
@@ -84,24 +100,28 @@ def initialize_simulation():
             os.remove(file)
         logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
 
-    # Discover and register objects already loaded by the visual server
-    logger.console_info("Discovering objects from visual server...")
-    num_bodies = p.getNumBodies()
-    logger.console_info(f"Found {num_bodies} bodies in simulation")
+    # Set simulation parameters
+    p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
+    logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
 
-    for i in range(num_bodies):
-        body_info = p.getBodyInfo(i)
-        body_name = body_info[0].decode('utf-8')
-        logger.console_info(f"Body {i}: {body_name}")
+    # Load objects from scene configuration
+    logger.console_info("Loading objects into scene...")
+    for obj in scene.objects:
+        if obj.type == 'cube':
+            object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
+            logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
+        else:
+            logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
+    logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
 
-        # Register objects (skip plane and robot)
-        if body_name not in ['plane.urdf', 'panda.urdf', ''] and 'plane' not in body_name.lower() and 'panda' not in body_name.lower():
-            # Extract object name from the body name (usually in format: path/name.urdf or just name)
-            obj_name = body_name.replace('.urdf', '').split('/')[-1]
-            object_manager.objects[obj_name] = i
-            logger.app_logger.info(f"Registered object: {obj_name} (ID: {i})")
-
-    logger.console_info(f"Registered {len(object_manager.objects)} objects from visual server")
+    # Stabilization loop
+    logger.console_info("Running stabilization loop...")
+    robot_controller.stabilize()
+    robot_controller.move_to_target([0.25, 0.25, 0.5], THRESHOLD_PRECISE)
+    robot_controller.reset_orientation()
+    for i in range(STABILIZATION_LOOP_STEPS):
+        p.stepSimulation()
+    logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")
 
     # Initialize Interactive LLM Controller
     logger.console_info("Initializing interactive LLM controller...")
