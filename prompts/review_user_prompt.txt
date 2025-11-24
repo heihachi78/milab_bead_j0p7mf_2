@@ -14,12 +14,4 @@
 
 ## Your Review Task
 
-Analyze the panorama image and the generated plan above. Does this plan correctly and safely accomplish the task? Consider:
-
-1. Does it achieve the stated goal?
-2. Are all commands in the correct order?
-3. Will the robot avoid collisions?
-4. Are all positions reachable and safe?
-5. For stacking tasks, is the order correct?
-
-Provide your analysis in the specified JSON format.
+Analyze the panorama image and the generated plan above.

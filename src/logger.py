@@ -137,10 +137,19 @@ class SimulationLogger:
 
     # ============== LLM Logging Methods ==============
 
-    def log_llm_request(self, system_prompt: str, user_prompt: str, model: str = "unknown"):
-        """Log an LLM request with system and user prompts."""
+    def log_llm_request(self, system_prompt: str, user_prompt: str, model: str = "unknown", stage: str = None):
+        """
+        Log an LLM request with system and user prompts.
+
+        Args:
+            system_prompt: System prompt text
+            user_prompt: User prompt text
+            model: Model name
+            stage: Optional stage identifier (e.g., "VISION_ANALYSIS", "PLANNING", "REVIEW")
+        """
         self.llm_logger.info("=" * 80)
-        self.llm_logger.info(f"LLM REQUEST | Model: {model}")
+        stage_info = f" | Stage: {stage}" if stage else ""
+        self.llm_logger.info(f"LLM REQUEST | Model: {model}{stage_info}")
         self.llm_logger.info("-" * 80)
         self.llm_logger.info("SYSTEM PROMPT:")
         self.llm_logger.info(system_prompt)
@@ -149,21 +158,42 @@ class SimulationLogger:
         self.llm_logger.info(user_prompt)
         self.llm_logger.info("=" * 80)
 
-    def log_llm_response(self, response: str, model: str = "unknown", input_tokens: int = None, output_tokens: int = None):
-        """Log an LLM response with optional token usage."""
+    def log_llm_response(self, response: str, model: str = "unknown", input_tokens: int = None, output_tokens: int = None, stage: str = None, cache_creation_tokens: int = 0, cache_read_tokens: int = 0):
+        """
+        Log an LLM response with optional token usage and cache metrics.
+
+        Args:
+            response: Response text
+            model: Model name
+            input_tokens: Input token count
+            output_tokens: Output token count
+            stage: Optional stage identifier
+            cache_creation_tokens: Cache creation token count
+            cache_read_tokens: Cache read token count
+        """
         self.llm_logger.info("=" * 80)
-        self.llm_logger.info(f"LLM RESPONSE | Model: {model}")
+        stage_info = f" | Stage: {stage}" if stage else ""
+        self.llm_logger.info(f"LLM RESPONSE | Model: {model}{stage_info}")
         if input_tokens is not None and output_tokens is not None:
             total_tokens = input_tokens + output_tokens
             self.llm_logger.info(f"TOKEN USAGE | Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}")
+            if cache_creation_tokens > 0 or cache_read_tokens > 0:
+                self.llm_logger.info(f"CACHE USAGE | Created: {cache_creation_tokens} | Read: {cache_read_tokens}")
         self.llm_logger.info("-" * 80)
         self.llm_logger.info(response)
         self.llm_logger.info("=" * 80)
         self.llm_logger.info("")  # Empty line for readability
 
-    def log_llm_error(self, error: str):
-        """Log an LLM error."""
-        self.llm_logger.error(f"LLM ERROR: {error}")
+    def log_llm_error(self, error: str, stage: str = None):
+        """
+        Log an LLM error.
+
+        Args:
+            error: Error message
+            stage: Optional stage identifier
+        """
+        stage_info = f" | Stage: {stage}" if stage else ""
+        self.llm_logger.error(f"LLM ERROR{stage_info}: {error}")
 
     # ============== Robot Logging Methods ==============
 

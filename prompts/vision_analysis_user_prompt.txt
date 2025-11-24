@@ -1,0 +1,14 @@
+Analyze the provided panoramic images of the robot workspace.
+
+## Objects in the Scene
+
+{OBJECTS_LIST}
+
+## Your Task
+
+Please provide a detailed analysis of each object listed above, describing:
+1. Whether it can be reached from above (top-down grasping)
+2. What objects (if any) are positioned above it
+3. Which sides are clear vs. blocked by adjacent objects
+
+Use the exact object names provided above in your analysis.

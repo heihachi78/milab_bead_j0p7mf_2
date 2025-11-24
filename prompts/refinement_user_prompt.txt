@@ -2,9 +2,21 @@
 
 {TASK_DESCRIPTION}
 
+## Available Objects
+
+{OBJECTS_LIST}
+
 ## Current Scene Information
 
 {OBJECTS_INFO}
+
+## Vision-Based Scene Analysis
+
+{VISION_ANALYSIS}
+
+## Spatial Relationship Analysis
+
+{SPATIAL_ANALYSIS}
 
 ## Original Plan (that needs improvement)
 
@@ -18,9 +30,10 @@
 
 ## Your Refinement Task
 
-Based on the critique above, generate an improved plan that:
+Based on the critique above and the vision/spatial analyses provided, generate an improved plan that:
 1. Addresses all the issues mentioned in the feedback
 2. Correctly accomplishes the original task
 3. Is physically feasible and safe
+4. Accounts for object reachability and blocking relationships identified in the analyses
 
-Analyze the panorama image to understand the current scene, then provide your refined plan in the specified JSON format.
+Provide your refined plan in the specified JSON format.

@@ -2,10 +2,27 @@
 
 {TASK_DESCRIPTION}
 
-## Current Scene
+## Scene Data
 
-Analyze the panorama image showing the current state of the workspace from multiple angles.
+**Available Objects:**
+
+{OBJECTS_LIST}
+
+**Object Positions and Dimensions (Pos = CENTER [x, y, z]):**
+
+{OBJECTS_INFO}
+
+## Vision-Based Scene Analysis
+
+{VISION_ANALYSIS}
+
+## Spatial Relationship Analysis
+
+{SPATIAL_ANALYSIS}
 
 ## Your Goal
 
-Generate a sequence of commands to accomplish the task described above. Consider the current positions of all objects and plan an efficient, collision-free sequence of actions.
+Generate a sequence of commands to accomplish the task described above. 
+Consider the vision and spatial analyses provided, 
+along with the current positions of all objects, 
+to plan an efficient, collision-free sequence of actions.

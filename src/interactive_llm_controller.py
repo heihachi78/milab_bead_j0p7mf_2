@@ -48,6 +48,16 @@ class InteractiveLLMController:
         # Load system prompt
         self.system_prompt = self._load_system_prompt()
 
+        # Log system prompt at initialization
+        if self.logger:
+            self.logger.interactive_logger.info("=" * 80)
+            self.logger.interactive_logger.info("INTERACTIVE MODE INITIALIZED")
+            self.logger.interactive_logger.info("-" * 80)
+            self.logger.interactive_logger.info("SYSTEM PROMPT:")
+            self.logger.interactive_logger.info(self.system_prompt)
+            self.logger.interactive_logger.info("=" * 80)
+            self.logger.interactive_logger.info("")  # Empty line for readability
+
         # Conversation history (managed externally, passed to handle_message)
         # Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": [...]}]
 

@@ -38,6 +38,10 @@ class LLMValidator:
         self.max_tokens = 2048
 
         # Load prompt templates
+        self.vision_analysis_system_prompt = self._load_file('vision_analysis_system_prompt.txt')
+        self.vision_analysis_user_prompt = self._load_file('vision_analysis_user_prompt.txt')
+        self.spatial_analysis_system_prompt = self._load_file('spatial_analysis_system_prompt.txt')
+        self.spatial_analysis_user_prompt = self._load_file('spatial_analysis_user_prompt.txt')
         self.planning_system_prompt = self._load_file('planning_system_prompt.txt')
         self.planning_user_prompt = self._load_file('planning_user_prompt.txt')
         self.review_system_prompt = self._load_file('review_system_prompt.txt')
@@ -130,38 +134,31 @@ class LLMValidator:
 
         return json.loads(json_str)
 
-    def _generate_initial_plan(self, task_description: str, panorama_path: str) -> Dict[str, Any]:
+    def _analyze_scene_vision(self, panorama_path: str) -> str:
         """
-        Generate initial plan using LangChain.
+        Stage 1: Analyze panorama to describe object reachability and spatial relationships.
 
         Args:
-            task_description: The task to accomplish
             panorama_path: Path to panorama image
 
         Returns:
-            Parsed plan dictionary
+            Natural language description of scene layout and accessibility
         """
         if self.logger:
-            self.logger.console_info("Generating initial plan...")
+            self.logger.console_info("Stage 1: Analyzing scene from panorama...")
 
-        # Build object info
-        objects_list, objects_info = self._build_objects_info()
+        # Build object list
+        objects_list, _ = self._build_objects_info()
 
-        # Format system prompt
-        system_prompt = self.planning_system_prompt.format(
-            OBJECTS_LIST=objects_list,
-            OBJECTS_INFO=objects_info
-        )
-
-        # Format user prompt
-        user_prompt_text = self.planning_user_prompt.format(
-            TASK_DESCRIPTION=task_description
+        # Format user prompt with object names
+        user_prompt_text = self.vision_analysis_user_prompt.format(
+            OBJECTS_LIST=objects_list
         )
 
         # Encode image
         image_data = self._encode_image(panorama_path)
 
-        # Create user message with image and text (with caching for panorama)
+        # Create user message with image (with caching for panorama)
         user_content = [
             {
                 "type": "image",
@@ -180,7 +177,126 @@ class LLMValidator:
 
         # Call Anthropic API
         if self.logger:
-            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model)
+            self.logger.log_llm_request(self.vision_analysis_system_prompt, user_prompt_text, self.model, stage="VISION_ANALYSIS")
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self.vision_analysis_system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_content
+                }
+            ]
+        )
+
+        # Extract text from response content blocks
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text += block.text
+
+        # Extract token usage (including cache metrics)
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+        cache_creation_tokens = (response.usage.cache_creation_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_creation_input_tokens') else 0
+        cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
+
+        if self.logger:
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens, stage="VISION_ANALYSIS", cache_creation_tokens=cache_creation_tokens, cache_read_tokens=cache_read_tokens)
+            self.logger.console_success("Vision analysis complete")
+
+        return response_text
+
+    def _analyze_spatial_relationships(self, vision_analysis: str) -> str:
+        """
+        Stage 2: Combine vision analysis with object positions to generate detailed spatial analysis.
+
+        Args:
+            vision_analysis: Natural language output from Stage 1
+
+        Returns:
+            Detailed spatial analysis with reachability and blocking information
+        """
+        if self.logger:
+            self.logger.console_info("Stage 2: Analyzing spatial relationships...")
+
+        # Build object position data
+        _, objects_info = self._build_objects_info()
+
+        # Format user prompt
+        user_prompt_text = self.spatial_analysis_user_prompt.format(
+            vision_analysis=vision_analysis,
+            object_positions=objects_info
+        )
+
+        # Call Anthropic API
+        if self.logger:
+            self.logger.log_llm_request(self.spatial_analysis_system_prompt, user_prompt_text, self.model, stage="SPATIAL_ANALYSIS")
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self.spatial_analysis_system_prompt,
+            messages=[
+                {
+                    "role": "user",
+                    "content": user_prompt_text
+                }
+            ]
+        )
+
+        # Extract text from response content blocks
+        response_text = ""
+        for block in response.content:
+            if block.type == "text":
+                response_text += block.text
+
+        # Extract token usage
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+
+        if self.logger:
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens, stage="SPATIAL_ANALYSIS")
+            self.logger.console_success("Spatial analysis complete")
+
+        return response_text
+
+    def _generate_initial_plan(self, task_description: str, panorama_path: str, vision_analysis: str = "", spatial_analysis: str = "") -> Dict[str, Any]:
+        """
+        Generate initial plan using LangChain.
+
+        Args:
+            task_description: The task to accomplish
+            panorama_path: Path to panorama image
+            vision_analysis: Vision-based scene analysis from Stage 1
+            spatial_analysis: Spatial relationship analysis from Stage 2
+
+        Returns:
+            Parsed plan dictionary
+        """
+        if self.logger:
+            self.logger.console_info("Stage 3: Generating initial plan...")
+
+        # Build object info
+        objects_list, objects_info = self._build_objects_info()
+
+        # System prompt is static (no formatting needed)
+        system_prompt = self.planning_system_prompt
+
+        # Format user prompt with scene data and analyses
+        user_prompt_text = self.planning_user_prompt.format(
+            TASK_DESCRIPTION=task_description,
+            OBJECTS_LIST=objects_list,
+            OBJECTS_INFO=objects_info,
+            VISION_ANALYSIS=vision_analysis,
+            SPATIAL_ANALYSIS=spatial_analysis
+        )
+
+        # Call Anthropic API (no image needed - vision analysis already extracted visual info)
+        if self.logger:
+            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model, stage="PLANNING")
 
         response = self.client.messages.create(
             model=self.model,
@@ -189,7 +305,7 @@ class LLMValidator:
             messages=[
                 {
                     "role": "user",
-                    "content": user_content
+                    "content": user_prompt_text
                 }
             ]
         )
@@ -206,9 +322,7 @@ class LLMValidator:
         cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
-            if cache_creation_tokens > 0 or cache_read_tokens > 0:
-                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens, stage="PLANNING", cache_creation_tokens=cache_creation_tokens, cache_read_tokens=cache_read_tokens)
 
         # Parse JSON
         plan = self._parse_json_response(response_text)
@@ -271,7 +385,7 @@ class LLMValidator:
 
         # Call Anthropic API
         if self.logger:
-            self.logger.log_llm_request(self.review_system_prompt, user_prompt_text, self.model)
+            self.logger.log_llm_request(self.review_system_prompt, user_prompt_text, self.model, stage="REVIEW")
 
         response = self.client.messages.create(
             model=self.model,
@@ -297,16 +411,14 @@ class LLMValidator:
         cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
-            if cache_creation_tokens > 0 or cache_read_tokens > 0:
-                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens, stage="REVIEW", cache_creation_tokens=cache_creation_tokens, cache_read_tokens=cache_read_tokens)
 
         # Parse JSON
         critique = self._parse_json_response(response_text)
 
         return critique
 
-    def _refine_plan(self, plan: Dict[str, Any], critique: Dict[str, Any], task_description: str, panorama_path: str) -> Dict[str, Any]:
+    def _refine_plan(self, plan: Dict[str, Any], critique: Dict[str, Any], task_description: str, panorama_path: str, vision_analysis: str = "", spatial_analysis: str = "") -> Dict[str, Any]:
         """
         Refine a plan based on critique using LangChain.
 
@@ -315,6 +427,8 @@ class LLMValidator:
             critique: The critique feedback
             task_description: The original task
             panorama_path: Path to panorama image
+            vision_analysis: Vision-based scene analysis from Stage 1
+            spatial_analysis: Spatial relationship analysis from Stage 2
 
         Returns:
             Refined plan dictionary
@@ -325,11 +439,8 @@ class LLMValidator:
         # Build object info
         objects_list, objects_info = self._build_objects_info()
 
-        # Format system prompt
-        system_prompt = self.refinement_system_prompt.format(
-            OBJECTS_LIST=objects_list,
-            OBJECTS_INFO=objects_info
-        )
+        # System prompt is static (no formatting needed)
+        system_prompt = self.refinement_system_prompt
 
         # Format critique text
         critique_text = f"Critique: {critique.get('critique', '')}\n\nSuggestions:\n"
@@ -339,34 +450,17 @@ class LLMValidator:
         # Format user prompt
         user_prompt_text = self.refinement_user_prompt.format(
             TASK_DESCRIPTION=task_description,
+            OBJECTS_LIST=objects_list,
             OBJECTS_INFO=objects_info,
             ORIGINAL_PLAN=json.dumps(plan, indent=2),
-            CRITIQUE=critique_text
+            CRITIQUE=critique_text,
+            VISION_ANALYSIS=vision_analysis,
+            SPATIAL_ANALYSIS=spatial_analysis
         )
 
-        # Encode image
-        image_data = self._encode_image(panorama_path)
-
-        # Create user message with image and text (with caching for panorama)
-        user_content = [
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": self._get_image_media_type(panorama_path),
-                    "data": image_data,
-                },
-                "cache_control": {"type": "ephemeral"}  # Cache panorama image
-            },
-            {
-                "type": "text",
-                "text": user_prompt_text
-            }
-        ]
-
-        # Call Anthropic API
+        # Call Anthropic API (no image needed - vision analysis already extracted visual info)
         if self.logger:
-            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model)
+            self.logger.log_llm_request(system_prompt, user_prompt_text, self.model, stage="REFINEMENT")
 
         response = self.client.messages.create(
             model=self.model,
@@ -375,7 +469,7 @@ class LLMValidator:
             messages=[
                 {
                     "role": "user",
-                    "content": user_content
+                    "content": user_prompt_text
                 }
             ]
         )
@@ -392,9 +486,7 @@ class LLMValidator:
         cache_read_tokens = (response.usage.cache_read_input_tokens or 0) if hasattr(response, 'usage') and hasattr(response.usage, 'cache_read_input_tokens') else 0
 
         if self.logger:
-            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens)
-            if cache_creation_tokens > 0 or cache_read_tokens > 0:
-                self.logger.console_info(f"Cache: {cache_read_tokens} tokens read, {cache_creation_tokens} tokens written")
+            self.logger.log_llm_response(response_text, self.model, input_tokens, output_tokens, stage="REFINEMENT", cache_creation_tokens=cache_creation_tokens, cache_read_tokens=cache_read_tokens)
 
         # Parse JSON
         refined_plan = self._parse_json_response(response_text)
@@ -406,11 +498,13 @@ class LLMValidator:
         Generate and validate a plan through iterative critique and refinement.
 
         This is the main entry point that orchestrates the entire validation workflow:
-        1. Generate initial plan
-        2. Critique the plan
-        3. If not valid, refine based on critique
-        4. Repeat critique-refinement cycle until valid or max iterations reached
-        5. Return final plan with validation status
+        1. Stage 1: Vision analysis - analyze panorama for object reachability
+        2. Stage 2: Spatial analysis - combine vision with positions for detailed blocking analysis
+        3. Stage 3: Generate initial plan using both analyses
+        4. Critique the plan
+        5. If not valid, refine based on critique
+        6. Repeat critique-refinement cycle until valid or max iterations reached
+        7. Return final plan with validation status
 
         Args:
             task_description: The task to accomplish
@@ -426,8 +520,14 @@ class LLMValidator:
         if max_iterations is None:
             max_iterations = config.MAX_VALIDATION_ITERATIONS if hasattr(config, 'MAX_VALIDATION_ITERATIONS') else 3
 
-        # Step 1: Generate initial plan
-        current_plan = self._generate_initial_plan(task_description, panorama_path)
+        # Step 1: Vision-based scene analysis
+        vision_analysis = self._analyze_scene_vision(panorama_path)
+
+        # Step 2: Spatial relationship analysis
+        spatial_analysis = self._analyze_spatial_relationships(vision_analysis)
+
+        # Step 3: Generate initial plan with both analyses
+        current_plan = self._generate_initial_plan(task_description, panorama_path, vision_analysis, spatial_analysis)
 
         # Step 2-N: Critique and refine loop
         final_critique = None
@@ -460,7 +560,7 @@ class LLMValidator:
                 return current_plan, False, final_critique
 
             # Refine the plan
-            current_plan = self._refine_plan(current_plan, critique, task_description, panorama_path)
+            current_plan = self._refine_plan(current_plan, critique, task_description, panorama_path, vision_analysis, spatial_analysis)
 
         # This should not be reached, but just in case
         return current_plan, False, final_critique
