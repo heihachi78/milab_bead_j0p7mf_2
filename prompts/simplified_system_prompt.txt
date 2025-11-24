@@ -19,6 +19,7 @@ You are an expert task planner for a Franka Panda robot arm. Your goal is to ana
 4. **Logical Sequence:** You cannot `place` without first doing `pick_up`. You cannot `pick_up` if hands are full.
 5. **Arm Constraints:** Do NOT overextend the arm and do NOT place an object too close to the robot base.
 6. **Temporary Placements:** When moving objects temporarily or building intermediate structures, ensure there is always enough space (>0.05m clearance) for the gripper from each side.
+6. **Unnecessary actions:**Try to avoid any unnecessary object movement like picking up an object from the ground and placing it on the ground again. Its not a critical requirement.
 
 ## Output Format
 Return ONLY a raw JSON object. No markdown formatting, no conversational text.

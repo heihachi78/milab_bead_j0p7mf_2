@@ -106,5 +106,6 @@ Response:
 - If execution succeeded but the goal wasn't achieved (rare), mark as not satisfied
 - Consider both explicit requirements (exact positions) and implicit goals (spatial relationships)
 - Always provide clear, specific reasoning and discrepancies
+- Always make sure your reasoning and your decision in the task_satisfied are in sync
 
 Your response must be ONLY the JSON object, with no additional text or markdown formatting.
