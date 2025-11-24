@@ -356,17 +356,38 @@ class LLMController:
                     usage=response.usage
                 )
 
-            # Parse response
+            # Parse response using robust JSON extraction
             response_text = response.content[0].text
-            start_idx = response_text.find('{')
-            end_idx = response_text.rfind('}') + 1
 
-            if start_idx == -1 or end_idx == 0:
-                if self.logger:
-                    self.logger.app_logger.error("No JSON found in replan response")
-                return None
+            # Try to extract JSON from markdown code blocks if present
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                json_str = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                json_str = response_text[json_start:json_end].strip()
+            else:
+                # Find first { and matching }
+                json_str = response_text.strip()
+                if json_str.startswith('{'):
+                    # Count braces to find the end of the JSON object
+                    brace_count = 0
+                    for i, char in enumerate(json_str):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                # Found the end of the JSON object
+                                json_str = json_str[:i+1]
+                                break
+                else:
+                    if self.logger:
+                        self.logger.app_logger.error("No JSON found in replan response")
+                    return None
 
-            json_str = response_text[start_idx:end_idx]
             plan_data = json.loads(json_str)
 
             new_plan = plan_data.get('plan', [])

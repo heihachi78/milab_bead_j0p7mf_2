@@ -16,9 +16,9 @@ When a collision is detected, use one of these strategies:
 2. **Move Obstacles** - If objects block access, move them temporarily to clear space
 3. **Alternative Position** - If placement position causes collision, choose a different location with more clearance (>0.1m)
 
-## Simple Replan Examples
+## Replan Examples
 
-### Example 1: Wrong Gripper Orientation → Rotate Gripper
+### Example 1: Close Neighbors Requiring Gripper Rotation
 
 **Original Task:** Place the red cube on top of the green
 
@@ -27,10 +27,13 @@ When a collision is detected, use one of these strategies:
 - Problem: Red and green cubes are 0.05m apart on Y-axis. Default gripper (0.1m wide) will collide with green_cube.
 - Affected objects: green_cube
 
+**Scene:**
+- red_cube: Position [0.300, 0.300, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Red
+- green_cube: Position [0.300, 0.350, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Green
+
 **Current State:**
-- red_cube: [0.30, 0.30, 0.05]
-- green_cube: [0.30, 0.35, 0.05]
 - Gripper: empty, default orientation
+- Completed steps: none
 
 **Solution:**
 ```json
@@ -41,93 +44,119 @@ When a collision is detected, use one of these strategies:
     {"action": "reset_gripper_orientation"},
     {"action": "place_on", "object": "green_cube"}
   ],
-  "explanation": "Rotate gripper to 0.05m width on Y-axis before picking red_cube to avoid hitting green_cube. Reset orientation after pickup for stable placement."
+  "explanation": "Rotate gripper to 0.05m width on Y-axis before picking red_cube to avoid hitting green_cube (0.05m spacing). Reset orientation after pickup for stable placement."
 }
 ```
 
-### Example 2: Placing Too Close → Choose Different Position
+### Example 2: Diagonal Spacing with Temporary Placement Strategy
 
-**Original Task:** Stack blue on red, then place green beside them
-
-**Collision Detected:**
-- Step: place green_cube at [0.30, 0.30, 0]
-- Problem: Placement position is only 0.05m from stack at [0.35, 0.30]. Gripper (0.1m wide) will collide with stack.
-- Affected objects: blue_cube, red_cube
-
-**Current State:**
-- blue_cube: [0.35, 0.30, 0.05]
-- red_cube: [0.35, 0.30, 0.15] (on top of blue)
-- green_cube: [0.50, 0.50, 0.05]
-- Gripper: empty
-- Completed: blue and red are already stacked
-
-**Solution:**
-```json
-{
-  "plan": [
-    {"action": "pick_up", "object": "green_cube"},
-    {"action": "place", "position": [0.20, 0.30, 0]}
-  ],
-  "explanation": "Changed placement position from [0.30, 0.30, 0] to [0.20, 0.30, 0], providing 0.15m clearance from the stack instead of 0.05m. This exceeds the 0.08m safety threshold."
-}
-```
-
-### Example 3: Picking from Bottom of Stack → Move Blocking Object
-
-**Original Task:** Place green cube on top of red cube
+**Original Task:** Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, blue cube
 
 **Collision Detected:**
 - Step: pick_up green_cube
-- Problem: Red cube is stacked on top of green_cube. Vertical approach is blocked.
+- Problem: Green cube is only 7.07cm away diagonally from red cube (2.07cm gap). Default gripper (0.1m wide) will collide.
 - Affected objects: red_cube
 
+**Scene:**
+- red_cube: Position [0.300, 0.300, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Red
+- green_cube: Position [0.350, 0.350, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Green
+- blue_cube: Position [0.400, 0.400, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Blue
+
 **Current State:**
-- green_cube: [0.40, 0.40, 0.05]
-- red_cube: [0.40, 0.40, 0.15] (on top of green)
-- Gripper: empty
+- Gripper: empty, default orientation
+- Completed steps: none
 
 **Solution:**
 ```json
 {
   "plan": [
-    {"action": "pick_up", "object": "red_cube"},
-    {"action": "place", "position": [0.25, 0.40, 0]},
+    {"action": "rotate_gripper_90"},
     {"action": "pick_up", "object": "green_cube"},
-    {"action": "place_on", "object": "red_cube"}
+    {"action": "reset_gripper_orientation"},
+    {"action": "place", "position": [0.2, 0.2, 0]},
+    {"action": "pick_up", "object": "blue_cube"},
+    {"action": "place", "position": [0.5, 0.5, 0]},
+    {"action": "pick_up", "object": "green_cube"},
+    {"action": "place_on", "object": "red_cube"},
+    {"action": "pick_up", "object": "blue_cube"},
+    {"action": "place_on", "object": "green_cube"}
   ],
-  "explanation": "Unstack red_cube first and place it temporarily at [0.25, 0.40, 0]. This clears access to green_cube. Then pick green_cube and place it on red_cube to achieve the goal."
+  "explanation": "Keep red_cube as base. Rotate gripper before picking green_cube (only 7.07cm from red). Move green and blue to temporary locations. Then build stack: green on red, blue on green."
 }
 ```
 
-### Example 4: Complex Stacking with Multiple Obstacles
+### Example 3: Unstacking and Reordering an Existing Tower
 
-**Original Task:** Stack all cubes: blue (bottom), yellow (middle), green (top)
+**Original Task:** Stack all cubes on top of each other in this order from bottom to top: green cube, blue cube, red cube
+
+**Collision Detected:**
+- Step: pick_up green_cube
+- Problem: Blue cube is stacked on top of green cube. Vertical approach is blocked.
+- Affected objects: blue_cube
+
+**Scene:**
+- red_cube: Position [0.300, 0.000, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Red
+- green_cube: Position [0.300, 0.000, 0.150], Dimensions [0.050, 0.050, 0.050], Color: Green (on top of red)
+- blue_cube: Position [0.300, 0.000, 0.250], Dimensions [0.050, 0.050, 0.050], Color: Blue (on top of green)
+
+**Current State:**
+- Gripper: empty
+- Completed steps: none
+- Current tower (bottom to top): red, green, blue
+
+**Solution:**
+```json
+{
+  "plan": [
+    {"action": "pick_up", "object": "blue_cube"},
+    {"action": "place", "position": [0.5, 0.0, 0]},
+    {"action": "pick_up", "object": "green_cube"},
+    {"action": "place", "position": [0.5, 0.1, 0]},
+    {"action": "pick_up", "object": "red_cube"},
+    {"action": "place_on", "object": "green_cube"},
+    {"action": "pick_up", "object": "blue_cube"},
+    {"action": "place_on", "object": "red_cube"}
+  ],
+  "explanation": "Unstack tower top-down: pick blue, place temporarily. Pick green, place temporarily. Pick red, stack on green. Pick blue, stack on red. Achieves target order: green (bottom), blue (middle), red (top)."
+}
+```
+
+### Example 4: Complex Multi-Object Reordering with Existing Stack
+
+**Original Task:** Create a stack that is in this order from bottom to up: blue cube, yellow cube, green cube, purple cube, red cube
 
 **Collision Detected:**
 - Step: pick_up yellow_cube
-- Problem: Purple cube is on top of yellow. Vertical access blocked.
+- Problem: Purple cube is stacked on top of yellow. Vertical approach is blocked.
 - Affected objects: purple_cube
 
+**Scene:**
+- blue_cube: Position [0.450, 0.500, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Blue
+- red_cube: Position [0.250, 0.450, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Red
+- green_cube: Position [0.100, 0.400, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Green
+- yellow_cube: Position [-0.150, 0.350, 0.050], Dimensions [0.050, 0.050, 0.050], Color: Yellow
+- purple_cube: Position [-0.150, 0.350, 0.150], Dimensions [0.050, 0.050, 0.050], Color: Purple (on top of yellow)
+
 **Current State:**
-- blue_cube: [0.45, 0.50, 0.05]
-- green_cube: [0.30, 0.40, 0.05]
-- yellow_cube: [-0.15, 0.35, 0.05]
-- purple_cube: [-0.15, 0.35, 0.15] (on top of yellow)
 - Gripper: empty
-- Completed: none
+- Completed steps: none
 
 **Solution:**
 ```json
 {
   "plan": [
     {"action": "pick_up", "object": "purple_cube"},
-    {"action": "place", "position": [0.10, 0.25, 0]},
+    {"action": "place", "position": [0.0, 0.5, 0]},
     {"action": "pick_up", "object": "yellow_cube"},
     {"action": "place_on", "object": "blue_cube"},
     {"action": "pick_up", "object": "green_cube"},
-    {"action": "place_on", "object": "yellow_cube"}
+    {"action": "place_on", "object": "yellow_cube"},
+    {"action": "pick_up", "object": "purple_cube"},
+    {"action": "place_on", "object": "green_cube"},
+    {"action": "pick_up", "object": "red_cube"},
+    {"action": "place_on", "object": "purple_cube"}
   ],
-  "explanation": "Remove purple_cube blocking yellow_cube by placing it temporarily at safe location. Then build target stack: yellow on blue, green on yellow."
+  "explanation": "Unstack purple from yellow first and place temporarily. Then build target stack at blue's position: yellow on blue, green on yellow, purple on green, red on purple."
 }
 ```
 
@@ -139,7 +168,8 @@ Generate a NEW plan that:
 3. Completes the original task goal
 4. Uses valid action sequences (pick before place, can't pick if holding object)
 
-Respond with JSON:
+**Respond with ONLY valid JSON, no additional text:**
+
 ```json
 {
   "plan": [

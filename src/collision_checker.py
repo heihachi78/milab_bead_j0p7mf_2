@@ -177,14 +177,33 @@ class CollisionChecker:
             CollisionResult object
         """
         try:
-            # Try to find JSON in response
-            start_idx = response_text.find('{')
-            end_idx = response_text.rfind('}') + 1
+            # Try to extract JSON from markdown code blocks if present
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                json_str = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                json_str = response_text[json_start:json_end].strip()
+            else:
+                # Find first { and matching }
+                json_str = response_text.strip()
+                if json_str.startswith('{'):
+                    # Count braces to find the end of the JSON object
+                    brace_count = 0
+                    for i, char in enumerate(json_str):
+                        if char == '{':
+                            brace_count += 1
+                        elif char == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                # Found the end of the JSON object
+                                json_str = json_str[:i+1]
+                                break
+                else:
+                    raise ValueError("No JSON found in response")
 
-            if start_idx == -1 or end_idx == 0:
-                raise ValueError("No JSON found in response")
-
-            json_str = response_text[start_idx:end_idx]
             data = json.loads(json_str)
 
             return CollisionResult(
