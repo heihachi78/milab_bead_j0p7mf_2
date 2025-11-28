@@ -82,6 +82,14 @@ class SimulationLogger:
         else:
             self.api_call_logger = None
 
+        # RAG logger for query/result logging
+        rag_log_filename = getattr(config, 'RAG_LOG_FILE', 'rag_queries.log')
+        self.rag_logger = self._create_logger(
+            "rag",
+            f"{log_dir}/{rag_log_filename}",
+            logging.DEBUG
+        )
+
         # Console logger for important messages only
         self.console_logger = self._create_console_logger()
 
@@ -723,6 +731,54 @@ class SimulationLogger:
         self.console_info("=" * 80)
         self.console_info("")
 
+    # ============== RAG Logging Methods ==============
+
+    def log_rag_query(self, query: str, current_objects: Optional[List[str]] = None):
+        """
+        Log a RAG query.
+
+        Args:
+            query: The query text
+            current_objects: Optional list of current object names
+        """
+        self.rag_logger.info("=" * 80)
+        self.rag_logger.info("RAG QUERY")
+        self.rag_logger.info("-" * 80)
+        self.rag_logger.info(f"Query: {query}")
+        if current_objects:
+            self.rag_logger.info(f"Current objects: {', '.join(current_objects)}")
+        self.rag_logger.info("-" * 80)
+
+    def log_rag_results(self, examples: List[Dict[str, Any]], formatted_context: str):
+        """
+        Log RAG results.
+
+        Args:
+            examples: List of retrieved examples
+            formatted_context: The formatted context string that will be injected
+        """
+        self.rag_logger.info(f"Results: {len(examples)} example(s) found")
+        self.rag_logger.info("-" * 80)
+
+        if not examples:
+            self.rag_logger.info("No relevant examples found.")
+        else:
+            for i, example in enumerate(examples, 1):
+                self.rag_logger.info(f"Example {i}:")
+                self.rag_logger.info(f"  Task: {example.get('task_description', 'N/A')}")
+                self.rag_logger.info(f"  Objects: {example.get('object_count', 0)} ({example.get('object_types', 'N/A')})")
+                self.rag_logger.info(f"  Colors: {example.get('object_colors', 'N/A')}")
+                if example.get('plan_reasoning'):
+                    self.rag_logger.info(f"  Reasoning: {example['plan_reasoning'][:200]}...")
+                commands = example.get('plan_commands', [])
+                self.rag_logger.info(f"  Commands: {len(commands)} command(s)")
+
+        self.rag_logger.info("-" * 80)
+        self.rag_logger.info("FORMATTED CONTEXT:")
+        self.rag_logger.info(formatted_context if formatted_context else "(empty)")
+        self.rag_logger.info("=" * 80)
+        self.rag_logger.info("")  # Empty line for readability
+
     # ============== Helper Methods ==============
 
     def _format_pos(self, position: list) -> str:
@@ -739,7 +795,7 @@ class SimulationLogger:
 
     def close(self):
         """Close all log handlers."""
-        loggers_to_close = [self.llm_logger, self.robot_logger, self.app_logger, self.interactive_logger, self.console_logger]
+        loggers_to_close = [self.llm_logger, self.robot_logger, self.app_logger, self.interactive_logger, self.console_logger, self.rag_logger]
         if self.api_call_logger:
             loggers_to_close.append(self.api_call_logger)
 

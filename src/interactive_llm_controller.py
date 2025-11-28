@@ -18,12 +18,13 @@ import anthropic
 from PIL import Image
 
 from . import config
+from .rag_retriever import RAGRetriever
 
 
 class InteractiveLLMController:
     """Interactive LLM controller for conversational robot control using Claude's native tool calling."""
 
-    def __init__(self, robot_controller, object_manager, camera_manager, simulation_state, logger=None):
+    def __init__(self, robot_controller, object_manager, camera_manager, simulation_state, logger=None, rag_retriever=None):
         """
         Initialize the interactive LLM controller.
 
@@ -33,12 +34,28 @@ class InteractiveLLMController:
             camera_manager: CameraManager instance for panorama capture
             simulation_state: SimulationState instance for state tracking
             logger: SimulationLogger instance for logging (optional)
+            rag_retriever: RAGRetriever instance for retrieving similar past tasks (optional)
         """
         self.robot_controller = robot_controller
         self.object_manager = object_manager
         self.camera_manager = camera_manager
         self.simulation_state = simulation_state
         self.logger = logger
+
+        # Initialize RAG retriever (lazy load if not provided and RAG is enabled)
+        self.rag_retriever = rag_retriever
+        if self.rag_retriever is None and config.ENABLE_RAG:
+            try:
+                self.rag_retriever = RAGRetriever(logger=self.logger)
+                if self.logger:
+                    stats = self.rag_retriever.get_stats()
+                    self.logger.console_info(
+                        f"RAG enabled: {stats['successful_executions']} successful tasks in database"
+                    )
+            except Exception as e:
+                if self.logger:
+                    self.logger.console_info(f"Warning: Failed to initialize RAG: {e}")
+                self.rag_retriever = None
 
         # Load environment variables
         load_dotenv()
@@ -501,10 +518,30 @@ class InteractiveLLMController:
             - panorama_base64: Base64 encoded panorama if get_panorama was called, else None
             - token_usage: Dictionary with 'input_tokens' and 'output_tokens' counts
         """
+        # Get RAG context if available
+        rag_context = ""
+        if self.rag_retriever is not None:
+            try:
+                current_objects = list(self.object_manager.objects.keys())
+                rag_context = self.rag_retriever.get_rag_context_for_message(
+                    user_message=user_message,
+                    current_objects=current_objects
+                )
+                if rag_context and self.logger:
+                    self.logger.console_info("RAG: Found relevant past task examples")
+            except Exception as e:
+                if self.logger:
+                    self.logger.console_info(f"RAG lookup failed: {e}")
+
+        # Prepare the message content (with RAG context prepended if available)
+        message_content = user_message
+        if rag_context:
+            message_content = f"{rag_context}\n\n## Current Request\n{user_message}"
+
         # Add user message to history
         conversation_history.append({
             "role": "user",
-            "content": user_message
+            "content": message_content
         })
 
         if self.logger:

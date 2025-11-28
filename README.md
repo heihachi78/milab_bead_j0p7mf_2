@@ -17,6 +17,8 @@ A PyBullet-based robotics simulation featuring a **Franka Panda robot arm** cont
   - [Console Interactive Mode](#2-console-interactive-mode)
   - [Streamlit Interactive Mode](#3-streamlit-interactive-mode)
 - [Detailed Workflow Explanations](#-detailed-workflow-explanations)
+- [RAG Pipeline](#-rag-pipeline)
+- [Database Structure](#-database-structure)
 - [Scene System](#-scene-system)
 - [Configuration](#-configuration)
 - [Prompt Caching](#-prompt-caching-strategy)
@@ -116,6 +118,8 @@ The system consists of several layered components:
 - **[src/camera_manager.py](src/camera_manager.py)**: Multi-view panorama capture
 - **[src/scene_loader.py](src/scene_loader.py)**: YAML scene parsing
 - **[src/logger.py](src/logger.py)**: Dual logging system (console + file)
+- **[src/task_store.py](src/task_store.py)**: Task history database (SQLite + ChromaDB)
+- **[src/rag_retriever.py](src/rag_retriever.py)**: RAG context retrieval and formatting
 
 ---
 
@@ -497,6 +501,282 @@ Streamlit's caching ensures the simulation is only initialized once per session,
 
 ---
 
+## 🔍 RAG Pipeline
+
+The system includes a **Retrieval-Augmented Generation (RAG)** pipeline that learns from past successful task executions to improve future performance.
+
+### Overview
+
+The RAG pipeline enables the robot to learn from experience by:
+1. **Recording** successful task executions to a database
+2. **Retrieving** similar past tasks when handling new requests
+3. **Augmenting** prompts with relevant examples
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        RAG PIPELINE                             │
+└─────────────────────────────────────────────────────────────────┘
+
+User Request: "Stack the red cube on the blue cube"
+  │
+  ├─► [1. Semantic Search]
+  │   ├─ Generate embedding for user request
+  │   ├─ Query ChromaDB for similar tasks
+  │   └─► Find: "Place red block on blue block" (similarity: 0.92)
+  │
+  ├─► [2. Retrieve Full Context]
+  │   ├─ Fetch execution details from SQLite
+  │   ├─ Get plan reasoning and commands
+  │   └─► Extract: {reasoning, commands, object_config}
+  │
+  ├─► [3. Format RAG Context]
+  │   ├─ Apply rag_context_template.txt
+  │   ├─ Format examples with task, reasoning, plan
+  │   └─► Generate context string
+  │
+  └─► [4. Augment Prompt]
+      ├─ Inject RAG context into system/user prompt
+      └─► LLM receives: original prompt + similar examples
+```
+
+### Components
+
+#### TaskStore ([src/task_store.py](src/task_store.py))
+
+The TaskStore handles all database operations:
+
+- **Recording**: Stores task executions with full context
+- **Querying**: Finds similar tasks via semantic search
+- **Hybrid Storage**: SQLite for structured data, ChromaDB for vectors
+
+```python
+# Record a successful execution
+task_store.record_execution(
+    scene_config=scene,
+    task_description="Stack red on blue",
+    plan={"reasoning": "...", "commands": [...]},
+    execution_result={"status": "success", "steps_completed": 2},
+    verification_result={"task_satisfied": True}
+)
+
+# Find similar past tasks
+similar = task_store.find_similar_tasks(
+    query="Put the red cube on top of blue",
+    n_results=3,
+    success_only=True
+)
+```
+
+#### RAGRetriever ([src/rag_retriever.py](src/rag_retriever.py))
+
+The RAGRetriever formats retrieved examples for prompt injection:
+
+```python
+# Get formatted RAG context for a user message
+rag = RAGRetriever()
+context = rag.get_rag_context_for_message(
+    user_message="Stack the cubes",
+    current_objects=["red_cube", "blue_cube"]
+)
+# Returns formatted examples from past successful tasks
+```
+
+### Configuration
+
+RAG settings in [src/config.py](src/config.py):
+
+```python
+# Enable/disable RAG
+ENABLE_RAG = True
+
+# Number of similar examples to retrieve
+RAG_NUM_EXAMPLES = 3
+
+# Embedding model for semantic search
+RAG_EMBEDDING_MODEL = 'all-MiniLM-L6-v2'
+
+# Similarity threshold (0-1, lower = more similar in distance space)
+RAG_SIMILARITY_THRESHOLD = 0.7
+
+# Template file for formatting RAG context
+RAG_CONTEXT_TEMPLATE_FILE = 'rag_context_template.txt'
+```
+
+### RAG Context Template
+
+The template at [prompts/rag_context_template.txt](prompts/rag_context_template.txt) formats retrieved examples:
+
+```
+## Relevant Past Successful Tasks
+
+The following are examples of similar tasks that were successfully completed.
+Use these as guidance for your approach.
+
+{examples}
+
+---
+
+**Note:** These are reference examples. Adapt to the current scene layout.
+```
+
+### How RAG Improves Performance
+
+1. **Faster Planning**: Model sees proven solutions for similar tasks
+2. **Fewer Errors**: Learn from past successes, avoid repeated mistakes
+3. **Scene-Agnostic**: Relative positions allow transfer across different scenes
+4. **Continuous Learning**: Each successful execution improves future performance
+
+---
+
+## 🗄 Database Structure
+
+The system uses a hybrid database approach combining **SQLite** for structured data and **ChromaDB** for vector embeddings.
+
+### Database Files
+
+Located in the `data/` folder:
+
+```
+data/
+├── task_history.db     # SQLite database
+└── chroma/             # ChromaDB vector store
+    ├── chroma.sqlite3
+    └── ...
+```
+
+### SQLite Schema
+
+#### task_executions Table
+
+Stores the main task execution records:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Primary key, auto-increment |
+| `timestamp` | DATETIME | When the execution occurred |
+| `task_description` | TEXT | Natural language task description |
+| `plan_reasoning` | TEXT | LLM's reasoning for the plan |
+| `plan_commands` | JSON | Array of executed commands |
+| `execution_status` | TEXT | 'success' or 'failed' |
+| `steps_completed` | INTEGER | Number of steps completed |
+| `task_satisfied` | BOOLEAN | Whether verification passed |
+| `verification_reasoning` | TEXT | LLM verification explanation |
+| `actual_state` | TEXT | Actual final state description |
+| `expected_state` | TEXT | Expected state description |
+| `discrepancies` | JSON | Array of noted discrepancies |
+| `object_count` | INTEGER | Number of objects in scene |
+| `object_types` | TEXT | Comma-separated object types |
+| `object_colors` | TEXT | Comma-separated color names |
+
+**Indexes:**
+- `idx_task_satisfied` - Fast filtering by success
+- `idx_object_count` - Filter by scene complexity
+- `idx_object_types` - Filter by object types
+
+#### object_states Table
+
+Stores object configurations for each execution (scene-agnostic via relative positions):
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INTEGER | Primary key, auto-increment |
+| `execution_id` | INTEGER | Foreign key to task_executions |
+| `object_index` | INTEGER | Object order in scene |
+| `object_type` | TEXT | Object type (e.g., 'cube') |
+| `rel_position_x` | REAL | X position relative to centroid |
+| `rel_position_y` | REAL | Y position relative to centroid |
+| `rel_position_z` | REAL | Z position relative to centroid |
+| `color_name` | TEXT | Human-readable color name |
+| `color_r` | REAL | Red component (0-1) |
+| `color_g` | REAL | Green component (0-1) |
+| `color_b` | REAL | Blue component (0-1) |
+| `color_a` | REAL | Alpha component (0-1) |
+| `scale` | REAL | Object scale factor |
+
+**Scene-Agnostic Design**: Object positions are stored relative to the scene centroid, enabling similarity matching across different absolute positions.
+
+### ChromaDB Collection
+
+The `task_embeddings` collection stores vector embeddings for semantic search:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Format: `exec_{execution_id}` |
+| `document` | Task description text |
+| `embedding` | Auto-generated vector embedding |
+| `metadata.execution_id` | Link to SQLite record |
+| `metadata.task_satisfied` | Success flag for filtering |
+| `metadata.object_types` | Object types string |
+| `metadata.object_colors` | Object colors string |
+| `metadata.object_count` | Number of objects |
+
+**Settings:**
+- Embedding function: ChromaDB default (no external dependencies)
+- Distance metric: Cosine similarity (`hnsw:space: cosine`)
+
+### Inspecting the Database
+
+Use the helper script to inspect database contents:
+
+```bash
+python helpers/sqlite_inspect.py
+# Or specify a different database:
+python helpers/sqlite_inspect.py data/task_history.db
+```
+
+**Example output:**
+```
+Database: data/task_history.db
+Tables: ['task_executions', 'object_states']
+
+--- task_executions (3 rows shown) ---
+(1, '2025-11-28 10:30:00', 'Stack red on blue', 'I will pick up...', '[{"action": "pick_up"...}]', 'success', 2, 1, 'Task completed...', 'Red cube on blue', 'Red cube on blue', None, 3, 'cube', 'blue,green,red')
+
+--- object_states (9 rows shown) ---
+(1, 1, 0, 'cube', -0.05, 0.1, 0.0, 'red', 1.0, 0.0, 0.0, 1.0, 1.0)
+...
+```
+
+### Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      DATA FLOW                                  │
+└─────────────────────────────────────────────────────────────────┘
+
+[Batch Mode Execution]
+       │
+       ├─► Task completes successfully
+       │
+       ├─► TaskStore.record_execution()
+       │   │
+       │   ├─► SQLite: INSERT INTO task_executions
+       │   │   └─► INSERT INTO object_states (for each object)
+       │   │
+       │   └─► ChromaDB: collection.add()
+       │       └─► Auto-generate embedding from task_description
+       │
+       └─► Execution ID returned
+
+[Interactive Mode Query]
+       │
+       ├─► User sends message
+       │
+       ├─► RAGRetriever.get_rag_context_for_message()
+       │   │
+       │   ├─► ChromaDB: collection.query()
+       │   │   └─► Semantic search with user message
+       │   │
+       │   ├─► SQLite: SELECT * FROM task_executions WHERE id IN (...)
+       │   │   └─► Fetch full execution details
+       │   │
+       │   └─► Format examples using template
+       │
+       └─► RAG context injected into prompt
+```
+
+---
+
 ## 🎬 Scene System
 
 ### Scene File Structure
@@ -738,6 +1018,38 @@ Look for:
 The system provides comprehensive logging at multiple levels.
 
 ### Log Files
+
+#### RAG Log
+**File**: `logs/rag_queries.log`
+
+**Contents**:
+- RAG queries (user messages sent to similarity search)
+- Current objects context
+- Retrieved examples with task descriptions, object info, and commands
+- Formatted RAG context injected into prompts
+
+**Example**:
+```
+================================================================================
+RAG QUERY
+--------------------------------------------------------------------------------
+Query: Stack the red cube on the blue cube
+Current objects: red_cube, blue_cube, green_cube
+--------------------------------------------------------------------------------
+Results: 2 example(s) found
+--------------------------------------------------------------------------------
+Example 1:
+  Task: Place red block on blue block
+  Objects: 3 (cube)
+  Colors: blue,green,red
+  Reasoning: I will pick up the red cube and place it on top of...
+  Commands: 2 command(s)
+--------------------------------------------------------------------------------
+FORMATTED CONTEXT:
+## Relevant Past Successful Tasks
+...
+================================================================================
+```
 
 #### Application Log
 **File**: `logs/app_YYYYMMDD_HHMMSS.log`

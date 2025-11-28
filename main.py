@@ -16,8 +16,10 @@ References:
     https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics_husky_kuka.py
 """
 
-import pybullet as p
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+import pybullet as p
 import glob
 import argparse
 from dotenv import load_dotenv
@@ -34,6 +36,7 @@ from src.llm_controller import LLMController
 from src.llm_validator import LLMValidator
 from src.logger import SimulationLogger
 from src.scene_loader import load_scene, list_available_scenes, SceneLoadError
+# TaskStore imported lazily to avoid loading sentence-transformers at startup
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='PyBullet Franka Panda robotics simulation with LLM control')
@@ -180,6 +183,7 @@ if not execution_failed_with_exception:
         logger.log_execution_success(execution_result['steps_completed'])
 
 # Post-execution verification (if enabled)
+verification_result = None
 if ENABLE_VERIFICATION and execution_result is not None:
     logger.log_verification_header()
 
@@ -198,6 +202,22 @@ if ENABLE_VERIFICATION and execution_result is not None:
 
     # Display verification results
     logger.log_verification_results(verification_result)
+
+# Record task execution to database
+if execution_result is not None:
+    try:
+        from src.task_store import TaskStore
+        task_store = TaskStore()
+        execution_id = task_store.record_execution(
+            scene_config=scene,
+            task_description=task_description,
+            plan=validated_plan,
+            execution_result=execution_result,
+            verification_result=verification_result
+        )
+        logger.console_info(f"Task execution recorded to database (ID: {execution_id})")
+    except Exception as e:
+        logger.console_info(f"Warning: Failed to record task execution: {e}")
 
 logger.log_app_simulation_end(simulation_state.t)
 logger.console_info("Simulation completed successfully")

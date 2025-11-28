@@ -1,0 +1,11 @@
+## Relevant Past Successful Tasks
+
+The following are examples of similar tasks that were successfully completed in the past.
+Use these as guidance for your approach - the plans shown here worked well for similar object configurations.
+
+{examples}
+
+---
+
+**Note:** These are reference examples. Adapt the approach to the current object positions and scene layout.
+

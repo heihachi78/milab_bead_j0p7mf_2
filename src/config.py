@@ -145,3 +145,16 @@ ENABLE_VERIFICATION = True  # Enable/disable post-execution task verification
 VERIFICATION_MAX_TOKENS = 2048  # Max tokens for verification LLM response
 VERIFICATION_SYSTEM_PROMPT_FILE = 'verification_system_prompt.txt'  # System prompt file for verification
 VERIFICATION_USER_PROMPT_FILE = 'verification_user_prompt.txt'  # User prompt template for verification
+
+# Database settings (for task history storage)
+DATABASE_FOLDER = 'data'
+SQLITE_DB_FILE = 'task_history.db'
+CHROMA_PERSIST_DIR = 'chroma'
+
+# RAG settings (for interactive/console mode)
+ENABLE_RAG = True  # Enable/disable RAG in interactive modes
+RAG_NUM_EXAMPLES = 3  # Number of similar tasks to retrieve
+RAG_EMBEDDING_MODEL = 'all-MiniLM-L6-v2'  # Local embedding model for similarity search
+RAG_SIMILARITY_THRESHOLD = 0.7  # Minimum similarity threshold (0-1, lower distance = more similar)
+RAG_CONTEXT_TEMPLATE_FILE = 'rag_context_template.txt'  # Template for RAG context injection
+RAG_LOG_FILE = 'rag_queries.log'  # Log file for RAG queries and results

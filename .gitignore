@@ -10,3 +10,7 @@ settings.json
 CLAUDE.md
 GEMINI.md
 .claude
+
+# Task history database
+data/task_history.db
+data/chroma/
