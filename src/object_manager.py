@@ -1,3 +1,11 @@
+"""
+Object management for PyBullet simulation.
+
+Provides functionality for loading, tracking, and querying objects in the
+simulation environment. Objects are registered by name and can be queried
+for their positions, dimensions, and other properties.
+"""
+
 import pybullet as p
 from .config import *
 
@@ -9,7 +17,12 @@ class ObjectManager:
     """
 
     def __init__(self, logger=None):
-        """Initialize object manager with empty registry."""
+        """
+        Initialize object manager with empty registry.
+
+        Args:
+            logger: SimulationLogger instance for logging (optional)
+        """
         self.objects = {}
         self.object_colors = {}  # Track colors for each object
         self.logger = logger

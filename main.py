@@ -1,5 +1,20 @@
-#https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics.py
-#https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics_husky_kuka.py
+"""
+Batch mode execution for LLM-controlled robot tasks.
+
+This script runs the robot simulation in autonomous batch mode, where:
+1. A scene is loaded from YAML configuration
+2. The LLM generates and validates an execution plan
+3. The plan is executed by the robot controller
+4. Optional post-execution verification checks task completion
+
+Usage:
+    python main.py --scene default
+    python main.py --scene scene_01
+
+References:
+    https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics.py
+    https://github.com/bulletphysics/bullet3/blob/master/examples/pybullet/examples/inverse_kinematics_husky_kuka.py
+"""
 
 import pybullet as p
 import os
@@ -32,12 +47,9 @@ logger.console_info("Initializing simulation...")
 
 try:
     scene = load_scene(args.scene)
-    logger.console_info(f"Loaded scene: {scene.metadata.name}")
-    logger.app_logger.info(f"Scene: {scene.metadata.name} - {scene.metadata.description}")
-    logger.app_logger.info(f"Objects in scene: {', '.join(scene.get_object_names())}")
+    logger.log_scene_loaded(scene.metadata.name, scene.metadata.description, scene.get_object_names())
 except SceneLoadError as e:
-    print(f"ERROR: Failed to load scene '{args.scene}': {e}")
-    logger.app_logger.error(f"Failed to load scene '{args.scene}': {e}")
+    logger.log_scene_load_error(args.scene, str(e))
     logger.close()
     exit(1)
 
@@ -50,7 +62,6 @@ simulation_state = SimulationState()
 object_manager = ObjectManager(logger)
 camera_manager = CameraManager(logger)
 robot_controller = RobotController(armId, endEffectorIndex, simulation_state, object_manager, camera_manager, logger)
-logger.app_logger.info("Simulation components initialized")
 
 # Stabilize robot
 logger.console_info("Stabilizing robot...")
@@ -62,21 +73,21 @@ if os.path.exists(images_folder):
     file_count = len(glob.glob(os.path.join(images_folder, '*')))
     for file in glob.glob(os.path.join(images_folder, '*')):
         os.remove(file)
-    logger.app_logger.info(f"Cleared {file_count} files from {images_folder} folder")
+    logger.log_images_folder_cleared(images_folder, file_count)
 
 # Set simulation parameters
 p.setRealTimeSimulation(USE_REAL_TIME_SIMULATION)
-logger.app_logger.info(f"Real-time simulation: {USE_REAL_TIME_SIMULATION}")
+logger.log_realtime_simulation_set(USE_REAL_TIME_SIMULATION)
 
 # Load objects from scene configuration
 logger.console_info("Loading objects into scene...")
 for obj in scene.objects:
     if obj.type == 'cube':
         object_manager.load_cube(obj.name, obj.position, obj.color, obj.scale)
-        logger.app_logger.info(f"Loaded {obj.type}: {obj.name} at {obj.position}")
+        logger.log_object_loaded(obj.type, obj.name, obj.position)
     else:
-        logger.app_logger.warning(f"Unknown object type '{obj.type}' for object '{obj.name}', skipping")
-logger.console_info(f"Loaded {len(scene.objects)} objects successfully")
+        logger.log_unknown_object_type(obj.type, obj.name)
+logger.log_objects_loaded_count(len(scene.objects))
 
 # Stabilization loop
 logger.console_info("Running stabilization loop...")
@@ -88,12 +99,12 @@ robot_controller.reset_orientation()
 # Allow system to settle with correct orientation
 for i in range(STABILIZATION_LOOP_STEPS):
     p.stepSimulation()
-logger.app_logger.info(f"Stabilization loop completed: {STABILIZATION_LOOP_STEPS} steps")
+logger.log_stabilization_complete(STABILIZATION_LOOP_STEPS)
 
 # Capture initial panorama after stabilization
 logger.console_info("Capturing initial scene panorama...")
 camera_manager.capture_and_save_panorama("initial_stabilized")
-logger.console_info("Initial panorama captured")
+logger.log_panorama_captured("Initial")
 
 # Initialize LLM controller and validator
 logger.console_info("Initializing LLM systems...")
@@ -101,21 +112,21 @@ logger.console_info("Initializing LLM systems...")
 # Create shared Anthropic client (used by both validator and controller)
 anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
 if not anthropic_api_key:
-    logger.console_error("ANTHROPIC_API_KEY not found in environment variables")
+    logger.log_api_key_missing()
     raise ValueError("ANTHROPIC_API_KEY is required")
 
 anthropic_client = Anthropic(api_key=anthropic_api_key)
 
 llm_controller = LLMController(object_manager, robot_controller, logger, anthropic_client)
 llm_validator = LLMValidator(object_manager, logger, anthropic_client)
-logger.app_logger.info("LLM controller and validator initialized")
+logger.log_llm_systems_initialized()
 
 # Main pick and place operations
 logger.log_app_simulation_start(simulation_state.t)
 
 # Get task description from scene
 task_description = scene.task.description
-logger.app_logger.info(f"Task description: {task_description[:100]}...")
+logger.log_task_description(task_description)
 
 # Generate and validate plan using simplified workflow
 logger.console_info("Generating and validating execution plan...")
@@ -123,40 +134,8 @@ validated_plan, is_valid, final_critique = llm_validator.get_validated_plan(task
 
 # Check if validation succeeded
 if not is_valid:
-    logger.console_error("=" * 80)
-    logger.console_error("VALIDATION FAILED - NO VALID PLAN FOUND")
-    logger.console_error("=" * 80)
-    logger.console_error("")
-    logger.console_error("The LLM could not generate a valid plan.")
-    logger.console_error("")
-
-    if final_critique:
-        logger.console_error("Validation errors:")
-        errors = final_critique.get('errors', [])
-        if errors:
-            for error in errors:
-                logger.console_error(f"  - {error}")
-        elif 'error' in final_critique:
-            logger.console_error(f"  - {final_critique['error']}")
-        logger.console_error("")
-
-    # Check if plan has no commands
     commands = validated_plan.get('commands', [])
-    if not commands or len(commands) == 0:
-        logger.console_error("The final plan contains NO COMMANDS (empty command list).")
-        logger.console_error("This usually means the LLM could not generate a valid command sequence.")
-    else:
-        logger.console_error(f"The final plan has {len(commands)} command(s) but failed validation checks.")
-
-    logger.console_error("")
-    logger.console_error("Possible reasons:")
-    logger.console_error("  - The task may be impossible given the current scene configuration")
-    logger.console_error("  - Object positions may make the task infeasible")
-    logger.console_error("  - The LLM may be confused about the scene state")
-    logger.console_error("")
-    logger.console_error("ABORTING EXECUTION - No robot operations will be performed.")
-    logger.console_error("=" * 80)
-
+    logger.log_validation_failed(final_critique, commands)
     logger.log_app_simulation_end(simulation_state.t)
     logger.close()
     p.disconnect()
@@ -165,26 +144,14 @@ if not is_valid:
 # Validate that the plan has commands
 commands = validated_plan.get('commands', [])
 if not commands or len(commands) == 0:
-    logger.console_warning("=" * 80)
-    logger.console_warning("WARNING: Plan contains no commands")
-    logger.console_warning("=" * 80)
-    logger.console_warning("")
-    logger.console_warning("The validated plan has an empty command list.")
-    logger.console_warning("This may indicate that:")
-    logger.console_warning("  - The scene is already in the desired state")
-    logger.console_warning("  - No actions are needed to complete the task")
-    logger.console_warning("")
-    logger.console_warning("Skipping execution (nothing to do).")
-    logger.console_warning("=" * 80)
-
+    logger.log_empty_plan_warning()
     logger.log_app_simulation_end(simulation_state.t)
     logger.close()
     p.disconnect()
     exit(0)
 
 # Execute the validated plan
-logger.console_info("Executing validated plan...")
-logger.console_info(f"Plan contains {len(commands)} command(s)")
+logger.log_execution_starting(len(commands))
 
 # Execute plan and handle both success and failure cases
 execution_result = None
@@ -203,39 +170,23 @@ except Exception as e:
         "details": exception_message,
         "steps_completed": 0
     }
-    logger.console_error("=" * 80)
-    logger.console_error("EXECUTION FAILED WITH EXCEPTION")
-    logger.console_error("=" * 80)
-    logger.console_error(f"Exception: {exception_message}")
-    logger.console_error("=" * 80)
+    logger.log_execution_exception(exception_message)
 
 # Check execution result (if didn't fail with exception)
 if not execution_failed_with_exception:
     if execution_result["status"] == "failed":
-        logger.console_error("=" * 80)
-        logger.console_error("EXECUTION FAILED")
-        logger.console_error("=" * 80)
-        logger.console_error(f"Reason: {execution_result['reason']}")
-        if "details" in execution_result:
-            logger.console_error(f"Details: {execution_result['details']}")
-        logger.console_error("=" * 80)
+        logger.log_execution_failed(execution_result['reason'], execution_result.get('details'))
     else:
-        logger.console_success("=" * 80)
-        logger.console_success("EXECUTION COMPLETED SUCCESSFULLY")
-        logger.console_success(f"Completed {execution_result['steps_completed']} steps")
-        logger.console_success("=" * 80)
+        logger.log_execution_success(execution_result['steps_completed'])
 
 # Post-execution verification (if enabled)
 if ENABLE_VERIFICATION and execution_result is not None:
-    logger.console_info("")
-    logger.console_info("=" * 80)
-    logger.console_info("POST-EXECUTION VERIFICATION")
-    logger.console_info("=" * 80)
+    logger.log_verification_header()
 
     # Capture post-execution panorama
     logger.console_info("Capturing post-execution panorama...")
     post_execution_panorama = camera_manager.capture_and_save_panorama("post_execution")
-    logger.console_info(f"Post-execution panorama saved: {post_execution_panorama}")
+    logger.log_verification_panorama_saved(post_execution_panorama)
 
     # Run verification
     verification_result = llm_validator.verify_task_completion(
@@ -246,37 +197,7 @@ if ENABLE_VERIFICATION and execution_result is not None:
     )
 
     # Display verification results
-    logger.console_info("")
-    logger.console_info("Verification Results:")
-    logger.console_info("-" * 80)
-
-    task_satisfied = verification_result.get("task_satisfied")
-
-    if task_satisfied is None:
-        # Verification failed
-        logger.console_error(f"Status: VERIFICATION ERROR")
-        logger.console_error(f"Message: {verification_result.get('reasoning', 'Unknown error')}")
-    elif task_satisfied:
-        # Task satisfied
-        logger.console_success(f"Status: TASK SATISFIED ✓")
-        logger.console_success(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
-        logger.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
-        logger.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
-    else:
-        # Task not satisfied
-        logger.console_warning(f"Status: TASK NOT SATISFIED ✗")
-        logger.console_warning(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
-        logger.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
-        logger.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
-
-        discrepancies = verification_result.get("discrepancies")
-        if discrepancies:
-            logger.console_warning("Discrepancies:")
-            for discrepancy in discrepancies:
-                logger.console_warning(f"  - {discrepancy}")
-
-    logger.console_info("=" * 80)
-    logger.console_info("")
+    logger.log_verification_results(verification_result)
 
 logger.log_app_simulation_end(simulation_state.t)
 logger.console_info("Simulation completed successfully")

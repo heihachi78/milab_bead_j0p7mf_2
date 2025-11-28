@@ -1,3 +1,10 @@
+"""
+Multi-camera management for scene visualization.
+
+Provides functionality for capturing images from multiple camera angles
+and compositing them into panorama images for LLM analysis and debugging.
+"""
+
 import pybullet as p
 import numpy as np
 from PIL import Image
@@ -12,7 +19,14 @@ class CameraManager:
     """
 
     def __init__(self, logger=None):
-        """Initialize camera manager with configuration from config.py"""
+        """
+        Initialize camera manager with configuration from config.py.
+
+        Sets up camera parameters and creates the images output folder.
+
+        Args:
+            logger: SimulationLogger instance for logging (optional)
+        """
         self.logger = logger
         self.target_position = CAMERA_TARGET_POSITION
         self.distance = CAMERA_DISTANCE

@@ -1,3 +1,11 @@
+"""
+Interactive LLM controller for conversational robot control.
+
+Provides a tool-calling interface for Claude to control the robot through
+natural language commands. Supports multi-turn conversations with tool
+execution for scene queries and robot operations.
+"""
+
 import os
 import json
 import base64
@@ -62,7 +70,15 @@ class InteractiveLLMController:
         # Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": [...]}]
 
     def _load_system_prompt(self) -> str:
-        """Load system prompt for interactive mode."""
+        """
+        Load system prompt for interactive mode from file.
+
+        Loads the system prompt from the configured prompt file. Falls back to
+        a default prompt if the file doesn't exist.
+
+        Returns:
+            System prompt text string
+        """
         prompt_file = config.INTERACTIVE_SYSTEM_PROMPT_FILE if hasattr(config, 'INTERACTIVE_SYSTEM_PROMPT_FILE') else 'interactive_system_prompt.txt'
         filepath = Path(__file__).parent.parent / 'prompts' / prompt_file
 
@@ -302,8 +318,19 @@ class InteractiveLLMController:
             return error_result
 
     def _execute_tool_impl(self, tool_name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
-        """Internal implementation of tool execution."""
+        """
+        Internal implementation of tool execution.
 
+        Dispatches to the appropriate handler based on tool name and executes
+        the corresponding robot or query operation.
+
+        Args:
+            tool_name: Name of the tool to execute
+            tool_input: Input parameters for the tool
+
+        Returns:
+            Dictionary with tool execution result including 'success' and 'message' keys
+        """
         if tool_name == "get_gripper_position":
             position = self.robot_controller.get_end_effector_position()
             return {

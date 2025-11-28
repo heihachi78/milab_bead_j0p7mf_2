@@ -1,3 +1,10 @@
+"""
+LLM controller for executing validated robot plans.
+
+Translates high-level command plans from the LLM validator into robot
+controller method calls for actual execution.
+"""
+
 import os
 from pathlib import Path
 from typing import Dict, Any

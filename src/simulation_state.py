@@ -1,3 +1,10 @@
+"""
+Simulation state management.
+
+Tracks simulation time and debug visualization state for the PyBullet
+robotics simulation.
+"""
+
 import pybullet as p
 from .config import *
 

@@ -1,3 +1,11 @@
+"""
+Multi-channel logging system for robot simulation.
+
+Provides structured logging to separate files for LLM interactions,
+robot actions, and application events. Includes Rich console output
+for real-time progress display.
+"""
+
 import logging
 import os
 import json
@@ -541,6 +549,179 @@ class SimulationLogger:
         self.api_call_logger.info(formatted_response)
         self.api_call_logger.info("=" * 80)
         self.api_call_logger.info("")  # Empty line for readability
+
+    # ============== Main Application Logging Methods ==============
+
+    def log_scene_loaded(self, scene_name: str, description: str, object_names: list):
+        """Log scene loading with metadata."""
+        self.console_info(f"Loaded scene: {scene_name}")
+        self.app_logger.info(f"Scene: {scene_name} - {description}")
+        self.app_logger.info(f"Objects in scene: {', '.join(object_names)}")
+
+    def log_scene_load_error(self, scene_name: str, error: str):
+        """Log scene loading failure."""
+        print(f"ERROR: Failed to load scene '{scene_name}': {error}")
+        self.app_logger.error(f"Failed to load scene '{scene_name}': {error}")
+
+    def log_images_folder_cleared(self, folder: str, file_count: int):
+        """Log clearing of images folder."""
+        self.app_logger.info(f"Cleared {file_count} files from {folder} folder")
+
+    def log_realtime_simulation_set(self, enabled: bool):
+        """Log real-time simulation setting."""
+        self.app_logger.info(f"Real-time simulation: {enabled}")
+
+    def log_object_loaded(self, obj_type: str, obj_name: str, position: list):
+        """Log object loading into scene."""
+        self.app_logger.info(f"Loaded {obj_type}: {obj_name} at {position}")
+
+    def log_unknown_object_type(self, obj_type: str, obj_name: str):
+        """Log unknown object type warning."""
+        self.app_logger.warning(f"Unknown object type '{obj_type}' for object '{obj_name}', skipping")
+
+    def log_objects_loaded_count(self, count: int):
+        """Log total objects loaded."""
+        self.console_info(f"Loaded {count} objects successfully")
+
+    def log_stabilization_complete(self, steps: int):
+        """Log stabilization loop completion."""
+        self.app_logger.info(f"Stabilization loop completed: {steps} steps")
+
+    def log_panorama_captured(self, name: str):
+        """Log panorama capture."""
+        self.console_info(f"{name} panorama captured")
+
+    def log_api_key_missing(self):
+        """Log missing API key error."""
+        self.console_error("ANTHROPIC_API_KEY not found in environment variables")
+
+    def log_llm_systems_initialized(self):
+        """Log LLM controller and validator initialization."""
+        self.app_logger.info("LLM controller and validator initialized")
+
+    def log_task_description(self, description: str):
+        """Log task description."""
+        self.app_logger.info(f"Task description: {description[:100]}...")
+
+    def log_validation_failed(self, final_critique: dict, commands: list):
+        """Log validation failure with details."""
+        self.console_error("=" * 80)
+        self.console_error("VALIDATION FAILED - NO VALID PLAN FOUND")
+        self.console_error("=" * 80)
+        self.console_error("")
+        self.console_error("The LLM could not generate a valid plan.")
+        self.console_error("")
+
+        if final_critique:
+            self.console_error("Validation errors:")
+            errors = final_critique.get('errors', [])
+            if errors:
+                for error in errors:
+                    self.console_error(f"  - {error}")
+            elif 'error' in final_critique:
+                self.console_error(f"  - {final_critique['error']}")
+            self.console_error("")
+
+        if not commands or len(commands) == 0:
+            self.console_error("The final plan contains NO COMMANDS (empty command list).")
+            self.console_error("This usually means the LLM could not generate a valid command sequence.")
+        else:
+            self.console_error(f"The final plan has {len(commands)} command(s) but failed validation checks.")
+
+        self.console_error("")
+        self.console_error("Possible reasons:")
+        self.console_error("  - The task may be impossible given the current scene configuration")
+        self.console_error("  - Object positions may make the task infeasible")
+        self.console_error("  - The LLM may be confused about the scene state")
+        self.console_error("")
+        self.console_error("ABORTING EXECUTION - No robot operations will be performed.")
+        self.console_error("=" * 80)
+
+    def log_empty_plan_warning(self):
+        """Log warning for empty command list."""
+        self.console_warning("=" * 80)
+        self.console_warning("WARNING: Plan contains no commands")
+        self.console_warning("=" * 80)
+        self.console_warning("")
+        self.console_warning("The validated plan has an empty command list.")
+        self.console_warning("This may indicate that:")
+        self.console_warning("  - The scene is already in the desired state")
+        self.console_warning("  - No actions are needed to complete the task")
+        self.console_warning("")
+        self.console_warning("Skipping execution (nothing to do).")
+        self.console_warning("=" * 80)
+
+    def log_execution_starting(self, command_count: int):
+        """Log execution start with command count."""
+        self.console_info("Executing validated plan...")
+        self.console_info(f"Plan contains {command_count} command(s)")
+
+    def log_execution_exception(self, exception_message: str):
+        """Log execution exception."""
+        self.console_error("=" * 80)
+        self.console_error("EXECUTION FAILED WITH EXCEPTION")
+        self.console_error("=" * 80)
+        self.console_error(f"Exception: {exception_message}")
+        self.console_error("=" * 80)
+
+    def log_execution_failed(self, reason: str, details: str = None):
+        """Log execution failure."""
+        self.console_error("=" * 80)
+        self.console_error("EXECUTION FAILED")
+        self.console_error("=" * 80)
+        self.console_error(f"Reason: {reason}")
+        if details:
+            self.console_error(f"Details: {details}")
+        self.console_error("=" * 80)
+
+    def log_execution_success(self, steps_completed: int):
+        """Log execution success."""
+        self.console_success("=" * 80)
+        self.console_success("EXECUTION COMPLETED SUCCESSFULLY")
+        self.console_success(f"Completed {steps_completed} steps")
+        self.console_success("=" * 80)
+
+    def log_verification_header(self):
+        """Log verification section header."""
+        self.console_info("")
+        self.console_info("=" * 80)
+        self.console_info("POST-EXECUTION VERIFICATION")
+        self.console_info("=" * 80)
+
+    def log_verification_panorama_saved(self, path: str):
+        """Log verification panorama save."""
+        self.console_info(f"Post-execution panorama saved: {path}")
+
+    def log_verification_results(self, verification_result: dict):
+        """Log verification results."""
+        self.console_info("")
+        self.console_info("Verification Results:")
+        self.console_info("-" * 80)
+
+        task_satisfied = verification_result.get("task_satisfied")
+
+        if task_satisfied is None:
+            self.console_error(f"Status: VERIFICATION ERROR")
+            self.console_error(f"Message: {verification_result.get('reasoning', 'Unknown error')}")
+        elif task_satisfied:
+            self.console_success(f"Status: TASK SATISFIED ✓")
+            self.console_success(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
+            self.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
+            self.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
+        else:
+            self.console_warning(f"Status: TASK NOT SATISFIED ✗")
+            self.console_warning(f"Reasoning: {verification_result.get('reasoning', 'No reasoning provided')}")
+            self.console_info(f"Actual State: {verification_result.get('actual_state', 'Not provided')}")
+            self.console_info(f"Expected State: {verification_result.get('expected_state', 'Not provided')}")
+
+            discrepancies = verification_result.get("discrepancies")
+            if discrepancies:
+                self.console_warning("Discrepancies:")
+                for discrepancy in discrepancies:
+                    self.console_warning(f"  - {discrepancy}")
+
+        self.console_info("=" * 80)
+        self.console_info("")
 
     # ============== Helper Methods ==============
 

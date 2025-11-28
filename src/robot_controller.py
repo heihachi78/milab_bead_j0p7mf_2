@@ -1,3 +1,10 @@
+"""
+Robot control for Franka Panda arm in PyBullet simulation.
+
+Provides low-level robot control including inverse kinematics, gripper
+operations, and high-level pick-and-place task execution.
+"""
+
 import numpy as np
 import pybullet as p
 import pybullet_data

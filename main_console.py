@@ -40,9 +40,15 @@ console = Console()
 
 
 class ConsoleSession:
-    """Manages console session state (replaces Streamlit session state)."""
+    """
+    Manages console session state for the interactive chat loop.
+
+    Tracks conversation history, token usage, and display preferences
+    across the session lifetime.
+    """
 
     def __init__(self):
+        """Initialize session with empty history and default settings."""
         self.messages = []  # Chat display messages
         self.conversation_history = []  # API conversation history
         self.total_input_tokens = 0
@@ -98,7 +104,14 @@ def print_help():
 
 
 def print_status(session, object_manager, robot_controller):
-    """Print current scene status."""
+    """
+    Print current scene status including objects, gripper state, and token usage.
+
+    Args:
+        session: ConsoleSession instance with token counts
+        object_manager: ObjectManager instance for object queries
+        robot_controller: RobotController instance for gripper state
+    """
     console.print()
 
     # Objects table
@@ -158,7 +171,13 @@ def print_status(session, object_manager, robot_controller):
 
 
 def display_tool_results(tool_results, verbose=False):
-    """Display tool execution results."""
+    """
+    Display tool execution results in the console.
+
+    Args:
+        tool_results: List of tool result dictionaries from LLM controller
+        verbose: If True, show detailed table view; if False, show compact summary
+    """
     if not tool_results:
         return
 
@@ -191,7 +210,16 @@ def display_tool_results(tool_results, verbose=False):
 
 
 def save_panorama(panorama_base64, session_name="console"):
-    """Save panorama image to file and return the path."""
+    """
+    Save base64-encoded panorama image to file.
+
+    Args:
+        panorama_base64: Base64-encoded JPEG image data
+        session_name: Session identifier for filename (default: "console")
+
+    Returns:
+        str: Path to saved image file, or None if save failed
+    """
     if not panorama_base64:
         return None
 
@@ -248,7 +276,25 @@ def get_input_with_simulation():
 
 
 def initialize_simulation(scene_name, logger):
-    """Initialize PyBullet simulation and all components."""
+    """
+    Initialize PyBullet simulation and all components.
+
+    Sets up the physics engine, robot controller, camera manager, and
+    interactive LLM controller. Loads the specified scene and stabilizes
+    the robot.
+
+    Args:
+        scene_name: Name of the scene YAML file to load
+        logger: SimulationLogger instance for logging
+
+    Returns:
+        dict: Dictionary containing initialized components:
+            - controller: InteractiveLLMController instance
+            - object_manager: ObjectManager instance
+            - robot_controller: RobotController instance
+            - scene: Loaded SceneConfig
+            - logger: SimulationLogger instance
+    """
     with console.status(f"[cyan]Initializing console simulation with scene: {scene_name}...", spinner="dots"):
         # Connect to PyBullet GUI
         armId = RobotController.initialize_pybullet(logger=logger)
@@ -332,8 +378,16 @@ def initialize_simulation(scene_name, logger):
 
 
 def main():
-    """Main console application."""
+    """
+    Main console application entry point.
 
+    Initializes the simulation, runs the interactive chat loop, and handles
+    cleanup on exit. Supports special commands (/help, /status, /quit, etc.)
+    and natural language robot control.
+
+    Returns:
+        int: Exit code (0 for success, 1 for error)
+    """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Robot Control Console - Interactive chat interface')
     parser.add_argument('--scene', type=str, default='default',

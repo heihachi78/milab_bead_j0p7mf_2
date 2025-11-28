@@ -1,3 +1,11 @@
+"""
+LLM-based plan generation and validation.
+
+Uses Claude to generate robot command plans from task descriptions and
+validates them through local Python checks for structure and logical
+correctness.
+"""
+
 import os
 import json
 import base64
@@ -51,25 +59,41 @@ class LLMValidator:
         self.verification_user_prompt = None
 
     def _load_file(self, filename: str) -> str:
-        """Load text file content from prompts folder."""
+        """
+        Load text file content from prompts folder.
+
+        Args:
+            filename: Name of the file to load from prompts directory
+
+        Returns:
+            Stripped content of the file as a string
+        """
         filepath = Path(__file__).parent.parent / 'prompts' / filename
         with open(filepath, 'r') as f:
             return f.read().strip()
 
     def _encode_image(self, image_path: str) -> str:
         """
+        Encode an image file to base64 string for API transmission.
 
-        Note: This method is used by the `verify_task_completion` method.
+        Args:
+            image_path: Path to the image file to encode
 
+        Returns:
+            Base64-encoded string of the image data
         """
         with open(image_path, 'rb') as f:
             return base64.standard_b64encode(f.read()).decode('utf-8')
 
     def _get_image_media_type(self, image_path: str) -> str:
         """
-        Determine media type based on file extension.
+        Determine MIME media type based on file extension.
 
-        Note: This method is used by the `verify_task_completion` method.
+        Args:
+            image_path: Path to the image file
+
+        Returns:
+            MIME type string (e.g., 'image/jpeg', 'image/png')
         """
         extension = Path(image_path).suffix.lower()
         if extension in ['.jpg', '.jpeg']:
