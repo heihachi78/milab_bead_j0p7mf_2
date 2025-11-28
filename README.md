@@ -1116,29 +1116,10 @@ pip install -r requirements.txt
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test with multiple scenes
-5. Submit a pull request
-
----
-
-## 📄 License
-
-[Your license here]
-
----
-
 ## 🙏 Acknowledgments
 
 - Built with [PyBullet](https://pybullet.org/) physics simulation
 - Powered by [Anthropic Claude](https://www.anthropic.com/) AI
-- Inspired by robotics research in task and motion planning
 
 ---
 
