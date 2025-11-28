@@ -7,3 +7,6 @@ logs/
 console.log
 settings.json
 .vscode
+CLAUDE.md
+GEMINI.md
+.claude
