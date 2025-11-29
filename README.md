@@ -90,6 +90,13 @@ The system consists of several layered components:
 │  │  LLMController     │           │                          │  │
 │  │  (Batch Planning)  │           │  (Tool-based Control)    │  │
 │  └────────────────────┘           └──────────────────────────┘  │
+│                │                              │                  │
+│                └──────────┬───────────────────┘                  │
+│                           ▼                                      │
+│              ┌──────────────────────────┐                        │
+│              │      RAGRetriever        │                        │
+│              │  (Context Augmentation)  │                        │
+│              └──────────────────────────┘                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────────┐
@@ -105,6 +112,14 @@ The system consists of several layered components:
 │                     PyBullet Simulation                         │
 │              (Franka Panda, Objects, Physics)                   │
 └─────────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────────┐
+│                    Data Layer                                   │
+│  ┌──────────────────────────┐  ┌─────────────────────────────┐  │
+│  │       TaskStore          │  │         ChromaDB            │  │
+│  │  (SQLite: executions)    │  │   (Vector embeddings)       │  │
+│  └──────────────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Core Components
@@ -118,6 +133,7 @@ The system consists of several layered components:
 - **[src/camera_manager.py](src/camera_manager.py)**: Multi-view panorama capture
 - **[src/scene_loader.py](src/scene_loader.py)**: YAML scene parsing
 - **[src/logger.py](src/logger.py)**: Dual logging system (console + file)
+- **[src/simulation_state.py](src/simulation_state.py)**: Simulation state tracking
 - **[src/task_store.py](src/task_store.py)**: Task history database (SQLite + ChromaDB)
 - **[src/rag_retriever.py](src/rag_retriever.py)**: RAG context retrieval and formatting
 
@@ -235,7 +251,7 @@ Batch mode uses a sophisticated two-stage LLM workflow where **two separate API 
      ```
 
 3. **Local Python Validation**
-   - **Method**: `LLMValidator._validate_plan_locally()` at [src/llm_validator.py:174](src/llm_validator.py#L174)
+   - **Method**: `LLMValidator._validate_plan_locally()` at [src/llm_validator.py:198](src/llm_validator.py#L198)
    - **Checks**:
      - JSON structure (has `reasoning` and `commands` fields)
      - Valid action names
@@ -341,7 +357,7 @@ Both console and Streamlit modes use the same underlying architecture with tool 
 
 **Key Difference from Batch**: Instead of generating a complete plan upfront, Claude decides which tools to use **in real-time** based on conversation context.
 
-#### Available Tools (14 Total)
+#### Available Tools (13 Total)
 
 **Query Tools** (non-destructive, information gathering):
 1. `get_gripper_position()` - Current end-effector position
@@ -785,24 +801,30 @@ Scenes are defined in YAML files in the [scenes/](scenes/) directory:
 
 ```yaml
 metadata:
-  name: "Default Scene"
-  description: "Simple cube manipulation scene"
+  name: "Example Stacking Scene"
+  description: "Three cubes arranged in a line for simple stacking"
 
 objects:
   - name: "red_cube"
     type: "cube"
-    position: [0.3, 0.3, 0.05]  # [x, y, z] in meters
-    color: [1, 0, 0, 1]         # RGBA (0-1 range)
+    position: [0.35, 0.35, 0.05]  # [x, y, z] in meters
+    color: [1, 0, 0, 1]           # RGBA (0-1 range)
     scale: 1.0
 
-  - name: "blue_cube"
+  - name: "green_cube"
     type: "cube"
-    position: [0.4, 0.2, 0.05]
-    color: [0, 0, 1, 1]
+    position: [0.4, 0.4, 0.05]
+    color: [0, 1, 0, 1]
+    scale: 1.0
+
+  - name: "yellow_cube"
+    type: "cube"
+    position: [0.45, 0.45, 0.05]
+    color: [1, 1, 0, 1]
     scale: 1.0
 
 task:
-  description: "Stack the red cube on top of the blue cube"
+  description: "Stack all cubes on top of each other in this order from bottom to top: red cube, green cube, yellow cube"
 ```
 
 ### Robot Workspace Limits
@@ -848,8 +870,8 @@ ls scenes/*.yaml
 ```
 
 Current scenes:
-- `default.yaml` - Basic 3-cube stacking task
-- `scene_01.yaml` - Alternative cube configuration
+- `default.yaml` - Three cubes for stacking (red, green, yellow)
+- `scene_01.yaml` through `scene_07.yaml` - Various cube configurations and tasks
 
 ---
 
@@ -869,7 +891,7 @@ THRESHOLD_CLOSE_TARGET = 0.01        # Rough positioning threshold
 
 # Physics stabilization
 STABILIZATION_LOOP_STEPS = 2500      # Physics steps before starting
-TIME_STEP = 1./240.                  # Physics simulation timestep
+TIME_STEP = 0.01                     # Physics simulation timestep
 ```
 
 #### LLM Settings
@@ -1294,7 +1316,7 @@ Add sphere-specific handling instructions to prompts.
 **Solution**:
 1. Check validation errors in logs
 2. Examine plan JSON structure
-3. Review validation logic in [src/llm_validator.py:174](src/llm_validator.py#L174)
+3. Review validation logic in [src/llm_validator.py:198](src/llm_validator.py#L198)
 
 #### Robot Cannot Reach Object
 
