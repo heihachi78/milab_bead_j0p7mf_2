@@ -274,6 +274,7 @@ Return ONLY a raw JSON object. No markdown formatting, no conversational text.
 4. **Temporary Placement:** Use safe temporary locations (typically [0.5, 0.0, 0] or similar) with adequate spacing (>0.1m from other objects)
 5. **Sequential Logic:** Pick, then place. Never place without picking first.
 6. **Ground Placement:** Always use z=0 for placing on ground
+7. **Zerus point distance**:** Do not use places on the ground that is closer than 0.3m to the zerus point.
 
 ## Your Task
 
