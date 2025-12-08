@@ -7,6 +7,8 @@ A PyBullet-based robotics simulation featuring a **Franka Panda robot arm** cont
 ![Anthropic](https://img.shields.io/badge/Claude-4.5-purple)
 
 ---
+Take a look at it: https://www.youtube.com/watch?v=uw4upkN-eTM
+--
 
 ## 📋 Table of Contents
 
